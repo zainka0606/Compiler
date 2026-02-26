@@ -9,18 +9,15 @@
 #include <vector>
 
 namespace {
-
 using compiler::regex::CompilePatternToDFA;
 using compiler::regex::CompilePatternToMinimizedDFA;
 using compiler::regex::DFA;
 using compiler::regex::DFAMatches;
+using compiler::regex::kInvalidDFAState;
 using compiler::regex::MinimizeDFA;
 using compiler::regex::ParseException;
-using compiler::regex::kInvalidDFAState;
 
-void Fail(std::string message) {
-    throw std::runtime_error(std::move(message));
-}
+void Fail(std::string message) { throw std::runtime_error(std::move(message)); }
 
 void ExpectTrue(bool condition, std::string_view message) {
     if (!condition) {
@@ -28,7 +25,8 @@ void ExpectTrue(bool condition, std::string_view message) {
     }
 }
 
-void ExpectEqual(std::size_t actual, std::size_t expected, std::string_view message) {
+void ExpectEqual(std::size_t actual, std::size_t expected,
+                 std::string_view message) {
     if (actual == expected) {
         return;
     }
@@ -37,20 +35,22 @@ void ExpectEqual(std::size_t actual, std::size_t expected, std::string_view mess
     Fail(oss.str());
 }
 
-void ExpectSameLanguage(const DFA& lhs, const DFA& rhs, const std::vector<std::string_view>& inputs) {
+void ExpectSameLanguage(const DFA &lhs, const DFA &rhs,
+                        const std::vector<std::string_view> &inputs) {
     for (std::string_view input : inputs) {
         const bool lhs_match = DFAMatches(lhs, input);
         const bool rhs_match = DFAMatches(rhs, input);
         if (lhs_match != rhs_match) {
             std::ostringstream oss;
-            oss << "language mismatch on input '" << input << "' (lhs=" << lhs_match
-                << ", rhs=" << rhs_match << ")";
+            oss << "language mismatch on input '" << input
+                << "' (lhs=" << lhs_match << ", rhs=" << rhs_match << ")";
             Fail(oss.str());
         }
     }
 }
 
-compiler::regex::DFAState MakeState(std::size_t default_target, bool accepting = false) {
+compiler::regex::DFAState MakeState(std::size_t default_target,
+                                    bool accepting = false) {
     compiler::regex::DFAState state;
     state.transitions.fill(default_target);
     state.is_accepting = accepting;
@@ -58,7 +58,8 @@ compiler::regex::DFAState MakeState(std::size_t default_target, bool accepting =
 }
 
 DFA MakeReducibleManualDFA() {
-    // Language: exactly "ax" or "bx". States 1 and 2 are equivalent and should merge.
+    // Language: exactly "ax" or "bx". States 1 and 2 are equivalent and should
+    // merge.
     DFA dfa;
     dfa.states.resize(6);
     dfa.start_state = 0;
@@ -84,39 +85,46 @@ DFA MakeReducibleManualDFA() {
 void ExpectInvalidPattern(std::string_view pattern) {
     try {
         (void)CompilePatternToMinimizedDFA(pattern);
-        Fail(std::string("expected parse failure for pattern '") + std::string(pattern) + "'");
-    } catch (const ParseException&) {
+        Fail(std::string("expected parse failure for pattern '") +
+             std::string(pattern) + "'");
+    } catch (const ParseException &) {
         return;
     }
 }
 
 struct TestCase {
-    const char* name;
+    const char *name;
     std::function<void()> run;
 };
-
 } // namespace
 
 int main() {
     const std::vector<TestCase> tests = {
-        {"manual_dfa_is_reduced_and_unreachable_removed", [] {
+        {"manual_dfa_is_reduced_and_unreachable_removed",
+         [] {
              const DFA original = MakeReducibleManualDFA();
              const DFA minimized = MinimizeDFA(original);
 
-             ExpectEqual(original.states.size(), 6, "sanity check original state count");
+             ExpectEqual(original.states.size(), 6,
+                         "sanity check original state count");
              ExpectEqual(minimized.states.size(), 4, "minimized state count");
-             ExpectTrue(minimized.start_state < minimized.states.size(), "start state out of range");
+             ExpectTrue(minimized.start_state < minimized.states.size(),
+                        "start state out of range");
          }},
-        {"manual_dfa_language_preserved", [] {
+        {"manual_dfa_language_preserved",
+         [] {
              const DFA original = MakeReducibleManualDFA();
              const DFA minimized = MinimizeDFA(original);
-             ExpectSameLanguage(original, minimized, {"", "a", "b", "x", "ax", "bx", "abx", "axx", "cx"});
+             ExpectSameLanguage(
+                 original, minimized,
+                 {"", "a", "b", "x", "ax", "bx", "abx", "axx", "cx"});
          }},
-        {"handles_incomplete_dfa_by_normalizing_sink", [] {
+        {"handles_incomplete_dfa_by_normalizing_sink",
+         [] {
              DFA dfa;
              dfa.states.resize(2);
              dfa.start_state = 0;
-             for (auto& state : dfa.states) {
+             for (auto &state : dfa.states) {
                  state.transitions.fill(kInvalidDFAState);
              }
              dfa.states[1].is_accepting = true;
@@ -125,32 +133,14 @@ int main() {
              const DFA minimized = MinimizeDFA(dfa);
              ExpectSameLanguage(dfa, minimized, {"", "z", "zz", "a"});
          }},
-        {"regex_compiled_dfa_minimization_preserves_language", [] {
+        {"regex_compiled_dfa_minimization_preserves_language",
+         [] {
              const std::vector<std::string_view> patterns = {
-                 "",
-                 "ab|cd",
-                 "a(b|c)*d",
-                 "x{2,4}",
-                 "[a-c]*d",
-                 ".{2,3}"
-             };
+                 "", "ab|cd", "a(b|c)*d", "x{2,4}", "[a-c]*d", ".{2,3}"};
 
              const std::vector<std::string_view> inputs = {
-                 "",
-                 "a",
-                 "ab",
-                 "cd",
-                 "ad",
-                 "abcd",
-                 "xx",
-                 "xxxx",
-                 "d",
-                 "aaad",
-                 "zzd",
-                 "abz",
-                 "abc",
-                 "abcd"
-             };
+                 "",     "a", "ab",   "cd",  "ad",  "abcd", "xx",
+                 "xxxx", "d", "aaad", "zzd", "abz", "abc",  "abcd"};
 
              for (std::string_view pattern : patterns) {
                  const DFA dfa = CompilePatternToDFA(pattern);
@@ -158,24 +148,25 @@ int main() {
                  ExpectSameLanguage(dfa, minimized, inputs);
              }
          }},
-        {"compile_pattern_to_minimized_dfa", [] {
+        {"compile_pattern_to_minimized_dfa",
+         [] {
              const DFA dfa = CompilePatternToMinimizedDFA("ac|bc");
-             ExpectTrue(!dfa.states.empty(), "compiled minimized DFA should not be empty");
+             ExpectTrue(!dfa.states.empty(),
+                        "compiled minimized DFA should not be empty");
              ExpectTrue(DFAMatches(dfa, "ac"), "expected match for ac");
              ExpectTrue(DFAMatches(dfa, "bc"), "expected match for bc");
              ExpectTrue(!DFAMatches(dfa, "abc"), "expected no match for abc");
          }},
-        {"invalid_pattern_propagates_parse_error", [] {
-             ExpectInvalidPattern("(");
-         }},
+        {"invalid_pattern_propagates_parse_error",
+         [] { ExpectInvalidPattern("("); }},
     };
 
     std::size_t failures = 0;
-    for (const auto& test : tests) {
+    for (const auto &test : tests) {
         try {
             test.run();
             std::cout << "[PASS] " << test.name << '\n';
-        } catch (const std::exception& ex) {
+        } catch (const std::exception &ex) {
             ++failures;
             std::cout << "[FAIL] " << test.name << ": " << ex.what() << '\n';
         }

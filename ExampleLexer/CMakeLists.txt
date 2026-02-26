@@ -9,69 +9,60 @@ set(EXAMPLE_LEXER_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/ExampleLexer")
 set(EXAMPLE_LEXER_GENERATED_HEADER "${EXAMPLE_LEXER_GENERATED_DIR}/ExampleLexer.h")
 set(EXAMPLE_LEXER_GENERATED_SOURCE "${EXAMPLE_LEXER_GENERATED_DIR}/ExampleLexer.cpp")
 
-add_custom_command(
-    OUTPUT
-        "${EXAMPLE_LEXER_INPUT_BUILD}"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${EXAMPLE_LEXER_INPUT_SOURCE}"
-        "${EXAMPLE_LEXER_INPUT_BUILD}"
-    DEPENDS
-        "${EXAMPLE_LEXER_INPUT_SOURCE}"
-    COMMENT "Copying ExampleLexer input file"
-    VERBATIM
+compiler_add_copy_file_command(
+        OUTPUT "${EXAMPLE_LEXER_INPUT_BUILD}"
+        SOURCE "${EXAMPLE_LEXER_INPUT_SOURCE}"
+        COMMENT "Copying ExampleLexer input file"
 )
 
-add_custom_command(
-    OUTPUT
-        "${EXAMPLE_LEXER_GENERATED_HEADER}"
-        "${EXAMPLE_LEXER_GENERATED_SOURCE}"
-    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${EXAMPLE_LEXER_SPEC_SOURCE}"
-        "${EXAMPLE_LEXER_SPEC_BUILD}"
-    COMMAND "$<TARGET_FILE:LexerGeneratorExe>"
-        --input "${EXAMPLE_LEXER_SPEC_BUILD}"
-    DEPENDS
-        LexerGeneratorExe
-        "${EXAMPLE_LEXER_SPEC_SOURCE}"
-    COMMENT "Generating ExampleLexer sources from ExampleLexer.lex"
-    VERBATIM
+compiler_add_lexer_generator_command(
+        SPEC_SOURCE "${EXAMPLE_LEXER_SPEC_SOURCE}"
+        SPEC_BUILD "${EXAMPLE_LEXER_SPEC_BUILD}"
+        OUTPUT_HEADER "${EXAMPLE_LEXER_GENERATED_HEADER}"
+        OUTPUT_SOURCE "${EXAMPLE_LEXER_GENERATED_SOURCE}"
+        COMMENT "Generating ExampleLexer sources from ExampleLexer.lex"
 )
 
 set_source_files_properties(
-    "${EXAMPLE_LEXER_GENERATED_HEADER}"
-    "${EXAMPLE_LEXER_GENERATED_SOURCE}"
-    PROPERTIES GENERATED TRUE
+        "${EXAMPLE_LEXER_GENERATED_HEADER}"
+        "${EXAMPLE_LEXER_GENERATED_SOURCE}"
+        PROPERTIES GENERATED TRUE
 )
 
 add_custom_target(ExampleLexerCodegen
-    DEPENDS
+        DEPENDS
         "${EXAMPLE_LEXER_GENERATED_HEADER}"
         "${EXAMPLE_LEXER_GENERATED_SOURCE}"
 )
 
 add_custom_target(ExampleLexerInput
-    DEPENDS
+        DEPENDS
         "${EXAMPLE_LEXER_INPUT_BUILD}"
 )
 
 add_executable(ExampleLexerDriver
-    Driver.cpp
-    "${EXAMPLE_LEXER_GENERATED_SOURCE}"
+        Driver.cpp
+        "${EXAMPLE_LEXER_GENERATED_SOURCE}"
 )
 
 add_dependencies(ExampleLexerDriver ExampleLexerCodegen)
 
+target_link_libraries(ExampleLexerDriver
+        PRIVATE
+        Common
+)
+
 target_include_directories(ExampleLexerDriver
-    PRIVATE
+        PRIVATE
         "${EXAMPLE_LEXER_GENERATED_DIR}"
 )
 
 add_custom_target(ExampleLexerRun
-    COMMAND "$<TARGET_FILE:ExampleLexerDriver>" "${EXAMPLE_LEXER_INPUT_BUILD}"
-    DEPENDS
+        COMMAND "$<TARGET_FILE:ExampleLexerDriver>" "${EXAMPLE_LEXER_INPUT_BUILD}"
+        DEPENDS
         ExampleLexerDriver
         ExampleLexerCodegen
         ExampleLexerInput
-    USES_TERMINAL
-    VERBATIM
+        USES_TERMINAL
+        VERBATIM
 )

@@ -7,14 +7,8 @@
 #include <vector>
 
 namespace compiler::regex {
-
 struct NFATransition {
-    enum class Type {
-        Epsilon,
-        Literal,
-        Dot,
-        CharacterClass
-    };
+    enum class Type { Epsilon, Literal, Dot, CharacterClass };
 
     Type type = Type::Epsilon;
     std::size_t target = 0;
@@ -25,7 +19,8 @@ struct NFATransition {
     static NFATransition Epsilon(std::size_t target);
     static NFATransition Literal(std::size_t target, char literal);
     static NFATransition Dot(std::size_t target);
-    static NFATransition CharacterClass(std::size_t target, bool negated, std::vector<CharacterClassItem> items);
+    static NFATransition CharacterClass(std::size_t target, bool negated,
+                                        std::vector<CharacterClassItem> items);
 };
 
 struct NFAState {
@@ -38,8 +33,7 @@ struct NFA {
     std::size_t accept_state = 0;
 };
 
-NFA CompileToNFA(const RegexNode& node);
+NFA CompileToNFA(const RegexNode &node);
 NFA CompilePatternToNFA(std::string_view pattern);
-bool NFAMatches(const NFA& nfa, std::string_view input);
-
+bool NFAMatches(const NFA &nfa, std::string_view input);
 } // namespace compiler::regex

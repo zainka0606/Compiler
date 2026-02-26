@@ -1,0 +1,20 @@
+grammar Expr;
+start Expr;
+
+token ID;
+token NUMBER;
+token PLUS;
+token MINUS;
+token STAR;
+token SLASH;
+token CARET;
+token LPAREN;
+token RPAREN;
+token COMMA;
+
+rule Expr -> Expr PLUS Term | Expr MINUS Term | Term;
+rule Term -> Term STAR Power | Term SLASH Power | Power;
+rule Power -> Unary CARET Power | Unary;
+rule Unary -> MINUS Unary | Primary;
+rule Primary -> NUMBER | ID | ID LPAREN ArgList RPAREN | LPAREN Expr RPAREN;
+rule ArgList -> Expr | Expr COMMA ArgList;

@@ -1,7 +1,9 @@
 # Compiler (Custom Language)
 
-This repository includes a working first-version lexer generator (`LexerGenerator`) built with a handwritten lexer/parser for its own spec language.
-It also includes a top-down (recursive-descent) regex parser, Thompson-style NFA construction, NFA->DFA conversion, and DFA minimization.
+This repository includes a working first-version lexer generator (`LexerGenerator`) built with a handwritten
+lexer/parser for its own spec language.
+It also includes a top-down (recursive-descent) regex parser, Thompson-style NFA construction, NFA->DFA conversion, and
+DFA minimization.
 
 ## Project Layout
 

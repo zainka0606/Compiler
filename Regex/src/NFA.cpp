@@ -5,34 +5,33 @@
 #include <utility>
 
 namespace compiler::regex {
-
 namespace {
-
 struct Fragment {
     std::size_t start = 0;
     std::size_t end = 0;
 };
 
 class NFABuilder {
-public:
-    Fragment Build(const RegexNode& node) {
+  public:
+    Fragment Build(const RegexNode &node) {
         switch (node.type) {
-            case RegexNode::Type::Empty:
-                return BuildEmpty();
-            case RegexNode::Type::Literal:
-                return BuildLiteral(node.literal);
-            case RegexNode::Type::Dot:
-                return BuildDot();
-            case RegexNode::Type::Sequence:
-                return BuildSequence(node.children);
-            case RegexNode::Type::Alternation:
-                return BuildAlternation(node.children);
-            case RegexNode::Type::Repetition:
-                return BuildRepetition(node);
-            case RegexNode::Type::Group:
-                return BuildGroup(node);
-            case RegexNode::Type::CharacterClass:
-                return BuildCharacterClass(node.char_class_negated, node.char_class_items);
+        case RegexNode::Type::Empty:
+            return BuildEmpty();
+        case RegexNode::Type::Literal:
+            return BuildLiteral(node.literal);
+        case RegexNode::Type::Dot:
+            return BuildDot();
+        case RegexNode::Type::Sequence:
+            return BuildSequence(node.children);
+        case RegexNode::Type::Alternation:
+            return BuildAlternation(node.children);
+        case RegexNode::Type::Repetition:
+            return BuildRepetition(node);
+        case RegexNode::Type::Group:
+            return BuildGroup(node);
+        case RegexNode::Type::CharacterClass:
+            return BuildCharacterClass(node.char_class_negated,
+                                       node.char_class_items);
         }
 
         throw std::logic_error("unsupported regex node type");
@@ -46,7 +45,7 @@ public:
         return nfa;
     }
 
-private:
+  private:
     std::vector<NFAState> states_;
 
     std::size_t AddState() {
@@ -83,21 +82,23 @@ private:
         return {start, end};
     }
 
-    Fragment BuildCharacterClass(bool negated, const std::vector<CharacterClassItem>& items) {
+    Fragment BuildCharacterClass(bool negated,
+                                 const std::vector<CharacterClassItem> &items) {
         const std::size_t start = AddState();
         const std::size_t end = AddState();
-        AddTransition(start, NFATransition::CharacterClass(end, negated, items));
+        AddTransition(start,
+                      NFATransition::CharacterClass(end, negated, items));
         return {start, end};
     }
 
-    Fragment BuildGroup(const RegexNode& node) {
+    Fragment BuildGroup(const RegexNode &node) {
         if (node.children.empty()) {
             return BuildEmpty();
         }
         return Build(node.children.front());
     }
 
-    Fragment BuildSequence(const std::vector<RegexNode>& children) {
+    Fragment BuildSequence(const std::vector<RegexNode> &children) {
         if (children.empty()) {
             return BuildEmpty();
         }
@@ -111,7 +112,7 @@ private:
         return result;
     }
 
-    Fragment BuildAlternation(const std::vector<RegexNode>& branches) {
+    Fragment BuildAlternation(const std::vector<RegexNode> &branches) {
         if (branches.empty()) {
             return BuildEmpty();
         }
@@ -119,7 +120,7 @@ private:
         const std::size_t start = AddState();
         const std::size_t end = AddState();
 
-        for (const auto& branch : branches) {
+        for (const auto &branch : branches) {
             Fragment fragment = Build(branch);
             AddEpsilon(start, fragment.start);
             AddEpsilon(fragment.end, end);
@@ -128,16 +129,16 @@ private:
         return {start, end};
     }
 
-    Fragment BuildRepetition(const RegexNode& node) {
+    Fragment BuildRepetition(const RegexNode &node) {
         if (node.children.empty()) {
             return BuildEmpty();
         }
-        return BuildRepetition(node.children.front(), node.repetition.min, node.repetition.max);
+        return BuildRepetition(node.children.front(), node.repetition.min,
+                               node.repetition.max);
     }
 
-    Fragment BuildRepetition(const RegexNode& operand,
-                            std::size_t min,
-                            const std::optional<std::size_t>& max) {
+    Fragment BuildRepetition(const RegexNode &operand, std::size_t min,
+                             const std::optional<std::size_t> &max) {
         bool has_result = false;
         Fragment result{};
 
@@ -171,7 +172,7 @@ private:
         return result;
     }
 
-    Fragment BuildOptional(const RegexNode& operand) {
+    Fragment BuildOptional(const RegexNode &operand) {
         const std::size_t start = AddState();
         const std::size_t end = AddState();
         Fragment body = Build(operand);
@@ -182,7 +183,7 @@ private:
         return {start, end};
     }
 
-    Fragment BuildKleeneStar(const RegexNode& operand) {
+    Fragment BuildKleeneStar(const RegexNode &operand) {
         const std::size_t start = AddState();
         const std::size_t end = AddState();
         Fragment body = Build(operand);
@@ -195,10 +196,10 @@ private:
     }
 };
 
-bool MatchCharacterClass(const NFATransition& transition, unsigned char value) {
+bool MatchCharacterClass(const NFATransition &transition, unsigned char value) {
     bool matched = false;
 
-    for (const auto& item : transition.char_class_items) {
+    for (const auto &item : transition.char_class_items) {
         const unsigned char first = static_cast<unsigned char>(item.first);
         const unsigned char last = static_cast<unsigned char>(item.last);
         if (item.is_range) {
@@ -215,24 +216,25 @@ bool MatchCharacterClass(const NFATransition& transition, unsigned char value) {
     return transition.char_class_negated ? !matched : matched;
 }
 
-bool TransitionMatches(const NFATransition& transition, char c) {
+bool TransitionMatches(const NFATransition &transition, char c) {
     const unsigned char value = static_cast<unsigned char>(c);
 
     switch (transition.type) {
-        case NFATransition::Type::Epsilon:
-            return false;
-        case NFATransition::Type::Literal:
-            return value == static_cast<unsigned char>(transition.literal);
-        case NFATransition::Type::Dot:
-            return true;
-        case NFATransition::Type::CharacterClass:
-            return MatchCharacterClass(transition, value);
+    case NFATransition::Type::Epsilon:
+        return false;
+    case NFATransition::Type::Literal:
+        return value == static_cast<unsigned char>(transition.literal);
+    case NFATransition::Type::Dot:
+        return true;
+    case NFATransition::Type::CharacterClass:
+        return MatchCharacterClass(transition, value);
     }
 
     return false;
 }
 
-std::vector<std::size_t> EpsilonClosure(const NFA& nfa, const std::vector<std::size_t>& seeds) {
+std::vector<std::size_t> EpsilonClosure(const NFA &nfa,
+                                        const std::vector<std::size_t> &seeds) {
     std::vector<std::size_t> closure;
     closure.reserve(nfa.states.size());
 
@@ -256,8 +258,9 @@ std::vector<std::size_t> EpsilonClosure(const NFA& nfa, const std::vector<std::s
         visited[state] = true;
         closure.push_back(state);
 
-        for (const auto& transition : nfa.states[state].transitions) {
-            if (transition.type == NFATransition::Type::Epsilon && transition.target < nfa.states.size()) {
+        for (const auto &transition : nfa.states[state].transitions) {
+            if (transition.type == NFATransition::Type::Epsilon &&
+                transition.target < nfa.states.size()) {
                 stack.push_back(transition.target);
             }
         }
@@ -265,7 +268,6 @@ std::vector<std::size_t> EpsilonClosure(const NFA& nfa, const std::vector<std::s
 
     return closure;
 }
-
 } // namespace
 
 NFATransition NFATransition::Epsilon(std::size_t target) {
@@ -290,9 +292,9 @@ NFATransition NFATransition::Dot(std::size_t target) {
     return transition;
 }
 
-NFATransition NFATransition::CharacterClass(std::size_t target,
-                                            bool negated,
-                                            std::vector<CharacterClassItem> items) {
+NFATransition
+NFATransition::CharacterClass(std::size_t target, bool negated,
+                              std::vector<CharacterClassItem> items) {
     NFATransition transition;
     transition.type = Type::CharacterClass;
     transition.target = target;
@@ -301,7 +303,7 @@ NFATransition NFATransition::CharacterClass(std::size_t target,
     return transition;
 }
 
-NFA CompileToNFA(const RegexNode& node) {
+NFA CompileToNFA(const RegexNode &node) {
     NFABuilder builder;
     Fragment root = builder.Build(node);
     return std::move(builder).Finish(root);
@@ -311,11 +313,12 @@ NFA CompilePatternToNFA(std::string_view pattern) {
     return CompileToNFA(Parse(pattern));
 }
 
-bool NFAMatches(const NFA& nfa, std::string_view input) {
+bool NFAMatches(const NFA &nfa, std::string_view input) {
     if (nfa.states.empty()) {
         return false;
     }
-    if (nfa.start_state >= nfa.states.size() || nfa.accept_state >= nfa.states.size()) {
+    if (nfa.start_state >= nfa.states.size() ||
+        nfa.accept_state >= nfa.states.size()) {
         return false;
     }
 
@@ -325,7 +328,7 @@ bool NFAMatches(const NFA& nfa, std::string_view input) {
         std::vector<std::size_t> next_seeds;
 
         for (std::size_t state : current) {
-            for (const auto& transition : nfa.states[state].transitions) {
+            for (const auto &transition : nfa.states[state].transitions) {
                 if (transition.type == NFATransition::Type::Epsilon) {
                     continue;
                 }
@@ -344,7 +347,7 @@ bool NFAMatches(const NFA& nfa, std::string_view input) {
         }
     }
 
-    return std::find(current.begin(), current.end(), nfa.accept_state) != current.end();
+    return std::find(current.begin(), current.end(), nfa.accept_state) !=
+           current.end();
 }
-
 } // namespace compiler::regex

@@ -1,0 +1,12 @@
+grammar Expr;
+start E;
+
+token ID;
+token PLUS;
+token STAR;
+token LPAREN;
+token RPAREN;
+
+rule E -> E PLUS T | T;
+rule T -> T STAR F | F;
+rule F -> LPAREN E RPAREN | ID;

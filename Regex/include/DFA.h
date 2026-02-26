@@ -8,7 +8,6 @@
 #include <vector>
 
 namespace compiler::regex {
-
 inline constexpr std::size_t kInvalidDFAState = static_cast<std::size_t>(-1);
 
 struct DFAState {
@@ -21,8 +20,7 @@ struct DFA {
     std::size_t start_state = kInvalidDFAState;
 };
 
-DFA CompileNFAToDFA(const NFA& nfa);
+DFA CompileNFAToDFA(const NFA &nfa);
 DFA CompilePatternToDFA(std::string_view pattern);
-bool DFAMatches(const DFA& dfa, std::string_view input);
-
+bool DFAMatches(const DFA &dfa, std::string_view input);
 } // namespace compiler::regex

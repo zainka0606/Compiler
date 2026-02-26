@@ -1,0 +1,8 @@
+grammar Expr;
+start E;
+
+token ID;
+token PLUS;
+
+rule E -> E PLUS T | T;
+rule T -> ID;

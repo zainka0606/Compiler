@@ -8,7 +8,6 @@
 #include <vector>
 
 namespace compiler::regex {
-
 struct CharacterClassItem {
     bool is_range = false;
     char first = '\0';
@@ -47,22 +46,23 @@ struct RegexNode {
     static RegexNode Dot();
     static RegexNode Sequence(std::vector<RegexNode> items);
     static RegexNode Alternation(std::vector<RegexNode> items);
-    static RegexNode Repetition(RegexNode operand, std::size_t min, std::optional<std::size_t> max);
+    static RegexNode Repetition(RegexNode operand, std::size_t min,
+                                std::optional<std::size_t> max);
     static RegexNode Group(RegexNode expression);
-    static RegexNode CharacterClass(bool negated, std::vector<CharacterClassItem> items);
+    static RegexNode CharacterClass(bool negated,
+                                    std::vector<CharacterClassItem> items);
 };
 
 class ParseException : public std::runtime_error {
-public:
+  public:
     ParseException(std::size_t position, std::string message);
 
     [[nodiscard]] std::size_t position() const noexcept;
 
-private:
+  private:
     std::size_t position_;
 };
 
 RegexNode Parse(std::string_view pattern);
-std::string ToDebugString(const RegexNode& node);
-
+std::string ToDebugString(const RegexNode &node);
 } // namespace compiler::regex

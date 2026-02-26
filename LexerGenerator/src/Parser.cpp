@@ -7,9 +7,7 @@
 #include <vector>
 
 namespace compiler::lexgen {
-
 namespace {
-
 struct SourcePos {
     std::size_t offset = 0;
     std::size_t line = 1;
@@ -20,24 +18,24 @@ std::string QuoteForMessage(std::string_view text) {
     std::string out = "\"";
     for (char c : text) {
         switch (c) {
-            case '\\':
-                out += "\\\\";
-                break;
-            case '"':
-                out += "\\\"";
-                break;
-            case '\n':
-                out += "\\n";
-                break;
-            case '\r':
-                out += "\\r";
-                break;
-            case '\t':
-                out += "\\t";
-                break;
-            default:
-                out.push_back(c);
-                break;
+        case '\\':
+            out += "\\\\";
+            break;
+        case '"':
+            out += "\\\"";
+            break;
+        case '\n':
+            out += "\\n";
+            break;
+        case '\r':
+            out += "\\r";
+            break;
+        case '\t':
+            out += "\\t";
+            break;
+        default:
+            out.push_back(c);
+            break;
         }
     }
     out += "\"";
@@ -60,28 +58,28 @@ struct Token {
     SourcePos pos;
 };
 
-const char* TokenKindName(TokenKind kind) {
+const char *TokenKindName(TokenKind kind) {
     switch (kind) {
-        case TokenKind::Identifier:
-            return "identifier";
-        case TokenKind::StringLiteral:
-            return "string literal";
-        case TokenKind::RegexLiteral:
-            return "regex literal";
-        case TokenKind::Equal:
-            return "'='";
-        case TokenKind::Semicolon:
-            return "';'";
-        case TokenKind::Scope:
-            return "'::'";
-        case TokenKind::End:
-            return "end of file";
+    case TokenKind::Identifier:
+        return "identifier";
+    case TokenKind::StringLiteral:
+        return "string literal";
+    case TokenKind::RegexLiteral:
+        return "regex literal";
+    case TokenKind::Equal:
+        return "'='";
+    case TokenKind::Semicolon:
+        return "';'";
+    case TokenKind::Scope:
+        return "'::'";
+    case TokenKind::End:
+        return "end of file";
     }
     return "token";
 }
 
 class Lexer {
-public:
+  public:
     explicit Lexer(std::string_view input) : input_(input) {}
 
     std::vector<Token> LexAll() {
@@ -97,7 +95,7 @@ public:
         return tokens;
     }
 
-private:
+  private:
     std::string_view input_;
     std::size_t index_ = 0;
     std::size_t line_ = 1;
@@ -133,7 +131,7 @@ private:
         return c;
     }
 
-    [[noreturn]] void Error(SourcePos pos, const std::string& message) const {
+    [[noreturn]] void Error(SourcePos pos, const std::string &message) const {
         throw SpecParseException(pos.offset, pos.line, pos.column, message);
     }
 
@@ -184,7 +182,8 @@ private:
             return Token{TokenKind::Scope, "::", pos};
         }
 
-        Error(pos, std::string("unexpected character ") + QuoteForMessage(std::string(1, c)));
+        Error(pos, std::string("unexpected character ") +
+                       QuoteForMessage(std::string(1, c)));
     }
 
     Token LexIdentifier() {
@@ -217,26 +216,26 @@ private:
                 }
                 const char e = Advance();
                 switch (e) {
-                    case 'n':
-                        value.push_back('\n');
-                        break;
-                    case 'r':
-                        value.push_back('\r');
-                        break;
-                    case 't':
-                        value.push_back('\t');
-                        break;
-                    case '\\':
-                        value.push_back('\\');
-                        break;
-                    case '"':
-                        value.push_back('"');
-                        break;
-                    case '0':
-                        value.push_back('\0');
-                        break;
-                    default:
-                        Error(pos, std::string("unsupported string escape \\") + e);
+                case 'n':
+                    value.push_back('\n');
+                    break;
+                case 'r':
+                    value.push_back('\r');
+                    break;
+                case 't':
+                    value.push_back('\t');
+                    break;
+                case '\\':
+                    value.push_back('\\');
+                    break;
+                case '"':
+                    value.push_back('"');
+                    break;
+                case '0':
+                    value.push_back('\0');
+                    break;
+                default:
+                    Error(pos, std::string("unsupported string escape \\") + e);
                 }
                 continue;
             }
@@ -272,7 +271,7 @@ private:
 };
 
 class Parser {
-public:
+  public:
     explicit Parser(std::vector<Token> tokens) : tokens_(std::move(tokens)) {}
 
     LexerSpecAST Parse() {
@@ -282,13 +281,17 @@ public:
         bool saw_token_enum = false;
 
         while (!Check(TokenKind::End)) {
-            const Token& keyword = Expect(TokenKind::Identifier, "expected declaration");
+            const Token &keyword =
+                Expect(TokenKind::Identifier, "expected declaration");
             if (keyword.text == "lexer") {
                 if (saw_lexer) {
                     Error(keyword, "duplicate 'lexer' declaration");
                 }
-                spec.lexer_name = Expect(TokenKind::Identifier, "expected lexer class name").text;
-                Expect(TokenKind::Semicolon, "expected ';' after lexer declaration");
+                spec.lexer_name =
+                    Expect(TokenKind::Identifier, "expected lexer class name")
+                        .text;
+                Expect(TokenKind::Semicolon,
+                       "expected ';' after lexer declaration");
                 saw_lexer = true;
                 continue;
             }
@@ -297,7 +300,8 @@ public:
                     Error(keyword, "duplicate 'namespace' declaration");
                 }
                 spec.namespace_parts = ParseQualifiedIdentifier();
-                Expect(TokenKind::Semicolon, "expected ';' after namespace declaration");
+                Expect(TokenKind::Semicolon,
+                       "expected ';' after namespace declaration");
                 saw_namespace = true;
                 continue;
             }
@@ -305,27 +309,34 @@ public:
                 if (saw_token_enum) {
                     Error(keyword, "duplicate 'token_enum' declaration");
                 }
-                spec.token_enum_name = Expect(TokenKind::Identifier, "expected token enum name").text;
-                Expect(TokenKind::Semicolon, "expected ';' after token_enum declaration");
+                spec.token_enum_name =
+                    Expect(TokenKind::Identifier, "expected token enum name")
+                        .text;
+                Expect(TokenKind::Semicolon,
+                       "expected ';' after token_enum declaration");
                 saw_token_enum = true;
                 continue;
             }
             if (keyword.text == "let") {
                 MacroDefinition macro;
-                macro.name = Expect(TokenKind::Identifier, "expected macro name").text;
+                macro.name =
+                    Expect(TokenKind::Identifier, "expected macro name").text;
                 Expect(TokenKind::Equal, "expected '=' after macro name");
                 macro.pattern = ParsePattern();
-                Expect(TokenKind::Semicolon, "expected ';' after macro definition");
+                Expect(TokenKind::Semicolon,
+                       "expected ';' after macro definition");
                 spec.macros.push_back(std::move(macro));
                 continue;
             }
             if (keyword.text == "token" || keyword.text == "skip") {
                 RuleDefinition rule;
                 rule.skip = (keyword.text == "skip");
-                rule.name = Expect(TokenKind::Identifier, "expected rule name").text;
+                rule.name =
+                    Expect(TokenKind::Identifier, "expected rule name").text;
                 Expect(TokenKind::Equal, "expected '=' after rule name");
                 rule.pattern = ParsePattern();
-                Expect(TokenKind::Semicolon, "expected ';' after rule definition");
+                Expect(TokenKind::Semicolon,
+                       "expected ';' after rule definition");
                 spec.rules.push_back(std::move(rule));
                 continue;
             }
@@ -334,47 +345,54 @@ public:
         }
 
         if (spec.rules.empty()) {
-            Error(Current(), "lexer spec must declare at least one token/skip rule");
+            Error(Current(),
+                  "lexer spec must declare at least one token/skip rule");
         }
         return spec;
     }
 
-private:
+  private:
     std::vector<Token> tokens_;
     std::size_t index_ = 0;
 
-    [[nodiscard]] const Token& Current() const {
-        return tokens_[index_];
-    }
+    [[nodiscard]] const Token &Current() const { return tokens_[index_]; }
 
     [[nodiscard]] bool Check(TokenKind kind) const {
         return Current().kind == kind;
     }
 
-    const Token& Advance() {
+    const Token &Advance() {
         if (!Check(TokenKind::End)) {
             ++index_;
         }
         return tokens_[index_ - 1];
     }
 
-    [[noreturn]] void Error(const Token& token, const std::string& message) const {
-        throw SpecParseException(token.pos.offset, token.pos.line, token.pos.column, message);
+    [[noreturn]] void Error(const Token &token,
+                            const std::string &message) const {
+        throw SpecParseException(token.pos.offset, token.pos.line,
+                                 token.pos.column, message);
     }
 
-    const Token& Expect(TokenKind kind, const std::string& message) {
+    const Token &Expect(TokenKind kind, const std::string &message) {
         if (!Check(kind)) {
-            Error(Current(), message + " (found " + std::string(TokenKindName(Current().kind)) + ")");
+            Error(Current(), message + " (found " +
+                                 std::string(TokenKindName(Current().kind)) +
+                                 ")");
         }
         return Advance();
     }
 
     std::vector<std::string> ParseQualifiedIdentifier() {
         std::vector<std::string> parts;
-        parts.push_back(Expect(TokenKind::Identifier, "expected namespace identifier").text);
+        parts.push_back(
+            Expect(TokenKind::Identifier, "expected namespace identifier")
+                .text);
         while (Check(TokenKind::Scope)) {
             Advance();
-            parts.push_back(Expect(TokenKind::Identifier, "expected namespace identifier after '::'").text);
+            parts.push_back(Expect(TokenKind::Identifier,
+                                   "expected namespace identifier after '::'")
+                                .text);
         }
         return parts;
     }
@@ -392,33 +410,29 @@ private:
             pattern.text = Advance().text;
             return pattern;
         }
-        Error(Current(), "expected regex literal (/.../) or string literal (\"...\")");
+        Error(Current(),
+              "expected regex literal (/.../) or string literal (\"...\")");
     }
 };
 
-std::string PatternDebugText(const PatternSource& pattern) {
+std::string PatternDebugText(const PatternSource &pattern) {
     if (pattern.kind == PatternSource::Kind::Regex) {
         return "/" + pattern.text + "/";
     }
     return QuoteForMessage(pattern.text);
 }
-
 } // namespace
 
-SpecParseException::SpecParseException(std::size_t offset, std::size_t line, std::size_t column, std::string message)
-    : std::runtime_error(std::move(message)), offset_(offset), line_(line), column_(column) {}
+SpecParseException::SpecParseException(std::size_t offset, std::size_t line,
+                                       std::size_t column, std::string message)
+    : std::runtime_error(std::move(message)), offset_(offset), line_(line),
+      column_(column) {}
 
-std::size_t SpecParseException::offset() const noexcept {
-    return offset_;
-}
+std::size_t SpecParseException::offset() const noexcept { return offset_; }
 
-std::size_t SpecParseException::line() const noexcept {
-    return line_;
-}
+std::size_t SpecParseException::line() const noexcept { return line_; }
 
-std::size_t SpecParseException::column() const noexcept {
-    return column_;
-}
+std::size_t SpecParseException::column() const noexcept { return column_; }
 
 LexerSpecAST ParseLexerSpec(std::string_view source_text) {
     Lexer lexer(source_text);
@@ -426,7 +440,7 @@ LexerSpecAST ParseLexerSpec(std::string_view source_text) {
     return parser.Parse();
 }
 
-std::string ToSpecDebugString(const LexerSpecAST& spec) {
+std::string ToSpecDebugString(const LexerSpecAST &spec) {
     std::ostringstream oss;
     oss << "LexerSpecAST\n";
     oss << "  lexer_name: " << spec.lexer_name << "\n";
@@ -445,16 +459,17 @@ std::string ToSpecDebugString(const LexerSpecAST& spec) {
     }
 
     oss << "  macros (" << spec.macros.size() << ")\n";
-    for (const auto& macro : spec.macros) {
-        oss << "    let " << macro.name << " = " << PatternDebugText(macro.pattern) << "\n";
+    for (const auto &macro : spec.macros) {
+        oss << "    let " << macro.name << " = "
+            << PatternDebugText(macro.pattern) << "\n";
     }
 
     oss << "  rules (" << spec.rules.size() << ")\n";
-    for (const auto& rule : spec.rules) {
-        oss << "    " << (rule.skip ? "skip " : "token ") << rule.name << " = " << PatternDebugText(rule.pattern) << "\n";
+    for (const auto &rule : spec.rules) {
+        oss << "    " << (rule.skip ? "skip " : "token ") << rule.name << " = "
+            << PatternDebugText(rule.pattern) << "\n";
     }
 
     return oss.str();
 }
-
 } // namespace compiler::lexgen

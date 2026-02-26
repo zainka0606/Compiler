@@ -10,9 +10,7 @@
 #include <vector>
 
 namespace compiler::regex {
-
 namespace {
-
 inline constexpr std::size_t kNoState = static_cast<std::size_t>(-1);
 
 struct NormalizedDFA {
@@ -57,15 +55,14 @@ struct DisjointSet {
     std::vector<std::uint8_t> rank;
 };
 
-DFA MakeEmptyDFA() {
-    return DFA{};
-}
+DFA MakeEmptyDFA() { return DFA{}; }
 
-ReachabilityInfo ComputeReachableStates(const DFA& dfa) {
+ReachabilityInfo ComputeReachableStates(const DFA &dfa) {
     ReachabilityInfo info;
     info.old_to_new.assign(dfa.states.size(), kNoState);
 
-    if (dfa.start_state == kInvalidDFAState || dfa.start_state >= dfa.states.size()) {
+    if (dfa.start_state == kInvalidDFAState ||
+        dfa.start_state >= dfa.states.size()) {
         return info;
     }
 
@@ -85,7 +82,8 @@ ReachabilityInfo ComputeReachableStates(const DFA& dfa) {
         info.reachable_order.push_back(state);
 
         for (std::size_t target : dfa.states[state].transitions) {
-            if (target != kInvalidDFAState && target < dfa.states.size() && info.old_to_new[target] == kNoState) {
+            if (target != kInvalidDFAState && target < dfa.states.size() &&
+                info.old_to_new[target] == kNoState) {
                 pending.push(target);
             }
         }
@@ -94,7 +92,7 @@ ReachabilityInfo ComputeReachableStates(const DFA& dfa) {
     return info;
 }
 
-NormalizedDFA NormalizeReachableDFA(const DFA& dfa) {
+NormalizedDFA NormalizeReachableDFA(const DFA &dfa) {
     const ReachabilityInfo reachable = ComputeReachableStates(dfa);
     if (reachable.reachable_order.empty()) {
         return {};
@@ -119,21 +117,24 @@ NormalizedDFA NormalizeReachableDFA(const DFA& dfa) {
     normalized.transitions.resize(reachable.reachable_order.size());
     normalized.accepting.resize(reachable.reachable_order.size(), false);
 
-    const std::size_t sink_state = needs_sink ? normalized.transitions.size() : kNoState;
+    const std::size_t sink_state =
+        needs_sink ? normalized.transitions.size() : kNoState;
     if (needs_sink) {
         normalized.transitions.push_back({});
         normalized.accepting.push_back(false);
         normalized.transitions.back().fill(sink_state);
     }
 
-    for (std::size_t new_index = 0; new_index < reachable.reachable_order.size(); ++new_index) {
+    for (std::size_t new_index = 0;
+         new_index < reachable.reachable_order.size(); ++new_index) {
         const std::size_t old_index = reachable.reachable_order[new_index];
-        const auto& old_state = dfa.states[old_index];
+        const auto &old_state = dfa.states[old_index];
 
         normalized.accepting[new_index] = old_state.is_accepting;
 
-        auto& transitions = normalized.transitions[new_index];
-        for (std::size_t byte_value = 0; byte_value < transitions.size(); ++byte_value) {
+        auto &transitions = normalized.transitions[new_index];
+        for (std::size_t byte_value = 0; byte_value < transitions.size();
+             ++byte_value) {
             const std::size_t target = old_state.transitions[byte_value];
             if (target == kInvalidDFAState || target >= dfa.states.size()) {
                 transitions[byte_value] = sink_state;
@@ -141,14 +142,16 @@ NormalizedDFA NormalizeReachableDFA(const DFA& dfa) {
             }
 
             const std::size_t remapped = reachable.old_to_new[target];
-            transitions[byte_value] = (remapped == kNoState) ? sink_state : remapped;
+            transitions[byte_value] =
+                (remapped == kNoState) ? sink_state : remapped;
         }
     }
 
     return normalized;
 }
 
-bool IsMarked(const std::vector<std::uint8_t>& marked, std::size_t n, std::size_t a, std::size_t b) {
+bool IsMarked(const std::vector<std::uint8_t> &marked, std::size_t n,
+              std::size_t a, std::size_t b) {
     if (a == b) {
         return false;
     }
@@ -158,7 +161,8 @@ bool IsMarked(const std::vector<std::uint8_t>& marked, std::size_t n, std::size_
     return marked[a * n + b] != 0;
 }
 
-void Mark(std::vector<std::uint8_t>& marked, std::size_t n, std::size_t a, std::size_t b) {
+void Mark(std::vector<std::uint8_t> &marked, std::size_t n, std::size_t a,
+          std::size_t b) {
     if (a == b) {
         return;
     }
@@ -168,9 +172,10 @@ void Mark(std::vector<std::uint8_t>& marked, std::size_t n, std::size_t a, std::
     marked[a * n + b] = 1;
 }
 
-DFA MinimizeNormalizedDFA(const NormalizedDFA& normalized) {
+DFA MinimizeNormalizedDFA(const NormalizedDFA &normalized) {
     const std::size_t n = normalized.transitions.size();
-    if (n == 0 || normalized.start_state == kNoState || normalized.start_state >= n) {
+    if (n == 0 || normalized.start_state == kNoState ||
+        normalized.start_state >= n) {
         return MakeEmptyDFA();
     }
 
@@ -194,9 +199,12 @@ DFA MinimizeNormalizedDFA(const NormalizedDFA& normalized) {
                     continue;
                 }
 
-                for (std::size_t byte_value = 0; byte_value < 256; ++byte_value) {
-                    const std::size_t next_i = normalized.transitions[i][byte_value];
-                    const std::size_t next_j = normalized.transitions[j][byte_value];
+                for (std::size_t byte_value = 0; byte_value < 256;
+                     ++byte_value) {
+                    const std::size_t next_i =
+                        normalized.transitions[i][byte_value];
+                    const std::size_t next_j =
+                        normalized.transitions[j][byte_value];
                     if (next_i == next_j) {
                         continue;
                     }
@@ -234,12 +242,13 @@ DFA MinimizeNormalizedDFA(const NormalizedDFA& normalized) {
     minimized.states.resize(root_to_class.size());
     minimized.start_state = state_to_class[normalized.start_state];
 
-    for (auto& state : minimized.states) {
+    for (auto &state : minimized.states) {
         state.transitions.fill(kInvalidDFAState);
         state.is_accepting = false;
     }
 
-    std::vector<std::size_t> representative_for_class(minimized.states.size(), kNoState);
+    std::vector<std::size_t> representative_for_class(minimized.states.size(),
+                                                      kNoState);
     for (std::size_t state = 0; state < n; ++state) {
         const std::size_t class_index = state_to_class[state];
         if (representative_for_class[class_index] == kNoState) {
@@ -250,27 +259,28 @@ DFA MinimizeNormalizedDFA(const NormalizedDFA& normalized) {
         }
     }
 
-    for (std::size_t class_index = 0; class_index < minimized.states.size(); ++class_index) {
-        const std::size_t representative = representative_for_class[class_index];
-        auto& out_state = minimized.states[class_index];
+    for (std::size_t class_index = 0; class_index < minimized.states.size();
+         ++class_index) {
+        const std::size_t representative =
+            representative_for_class[class_index];
+        auto &out_state = minimized.states[class_index];
 
         for (std::size_t byte_value = 0; byte_value < 256; ++byte_value) {
-            const std::size_t next_state = normalized.transitions[representative][byte_value];
+            const std::size_t next_state =
+                normalized.transitions[representative][byte_value];
             out_state.transitions[byte_value] = state_to_class[next_state];
         }
     }
 
     return minimized;
 }
-
 } // namespace
 
-DFA MinimizeDFA(const DFA& dfa) {
+DFA MinimizeDFA(const DFA &dfa) {
     return MinimizeNormalizedDFA(NormalizeReachableDFA(dfa));
 }
 
 DFA CompilePatternToMinimizedDFA(std::string_view pattern) {
     return MinimizeDFA(CompilePatternToDFA(pattern));
 }
-
 } // namespace compiler::regex

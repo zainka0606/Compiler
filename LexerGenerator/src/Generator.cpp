@@ -1,4 +1,6 @@
 #include "Generator.h"
+#include "Common/Graphviz.h"
+#include "Common/Identifier.h"
 
 #include <algorithm>
 #include <array>
@@ -16,31 +18,29 @@
 #include <utility>
 
 namespace compiler::lexgen {
-
 namespace {
-
 std::string QuoteForMessage(std::string_view text) {
     std::string out = "\"";
     for (char c : text) {
         switch (c) {
-            case '\\':
-                out += "\\\\";
-                break;
-            case '"':
-                out += "\\\"";
-                break;
-            case '\n':
-                out += "\\n";
-                break;
-            case '\r':
-                out += "\\r";
-                break;
-            case '\t':
-                out += "\\t";
-                break;
-            default:
-                out.push_back(c);
-                break;
+        case '\\':
+            out += "\\\\";
+            break;
+        case '"':
+            out += "\\\"";
+            break;
+        case '\n':
+            out += "\\n";
+            break;
+        case '\r':
+            out += "\\r";
+            break;
+        case '\t':
+            out += "\\t";
+            break;
+        default:
+            out.push_back(c);
+            break;
         }
     }
     out += "\"";
@@ -49,27 +49,27 @@ std::string QuoteForMessage(std::string_view text) {
 
 std::string EscapeRegexLiteralChar(char c) {
     switch (c) {
-        case '\\':
-        case '.':
-        case '[':
-        case ']':
-        case '(':
-        case ')':
-        case '{':
-        case '}':
-        case '*':
-        case '+':
-        case '?':
-        case '|':
-            return std::string("\\") + c;
-        case '\n':
-            return "\\n";
-        case '\r':
-            return "\\r";
-        case '\t':
-            return "\\t";
-        default:
-            return std::string(1, c);
+    case '\\':
+    case '.':
+    case '[':
+    case ']':
+    case '(':
+    case ')':
+    case '{':
+    case '}':
+    case '*':
+    case '+':
+    case '?':
+    case '|':
+        return std::string("\\") + c;
+    case '\n':
+        return "\\n";
+    case '\r':
+        return "\\r";
+    case '\t':
+        return "\\t";
+    default:
+        return std::string(1, c);
     }
 }
 
@@ -84,71 +84,29 @@ std::string EscapeRegexFromLiteral(std::string_view text) {
 
 std::string EscapeDebugChar(char c) {
     switch (c) {
-        case '\n':
-            return "\\n";
-        case '\r':
-            return "\\r";
-        case '\t':
-            return "\\t";
-        case '\\':
-            return "\\\\";
-        case '"':
-            return "\\\"";
-        default:
-            return std::string(1, c);
+    case '\n':
+        return "\\n";
+    case '\r':
+        return "\\r";
+    case '\t':
+        return "\\t";
+    case '\\':
+        return "\\\\";
+    case '"':
+        return "\\\"";
+    default:
+        return std::string(1, c);
     }
 }
 
-std::string EscapeDotLabel(std::string_view text) {
-    std::string out;
-    out.reserve(text.size() * 2);
-    for (char c : text) {
-        switch (c) {
-            case '\\':
-                out += "\\\\";
-                break;
-            case '"':
-                out += "\\\"";
-                break;
-            case '\n':
-                out += "\\n";
-                break;
-            case '\r':
-                out += "\\r";
-                break;
-            case '\t':
-                out += "\\t";
-                break;
-            default:
-                out.push_back(c);
-                break;
-        }
-    }
-    return out;
+std::string SanitizeIdentifier(std::string_view text,
+                               std::string_view fallback) {
+    return compiler::common::SanitizeIdentifier(text, fallback);
 }
 
-std::string SanitizeIdentifier(std::string_view text, std::string_view fallback) {
-    std::string out;
-    out.reserve(text.size());
-    for (char c : text) {
-        if (std::isalnum(static_cast<unsigned char>(c)) || c == '_') {
-            out.push_back(c);
-        } else {
-            out.push_back('_');
-        }
-    }
-    if (out.empty()) {
-        out = std::string(fallback);
-    }
-    if (std::isdigit(static_cast<unsigned char>(out.front()))) {
-        out.insert(out.begin(), '_');
-    }
-    return out;
-}
-
-std::string OpenNamespaces(const std::vector<std::string>& parts) {
+std::string OpenNamespaces(const std::vector<std::string> &parts) {
     std::ostringstream oss;
-    for (const auto& part : parts) {
+    for (const auto &part : parts) {
         oss << "namespace " << part << " {\n";
     }
     if (!parts.empty()) {
@@ -157,24 +115,27 @@ std::string OpenNamespaces(const std::vector<std::string>& parts) {
     return oss.str();
 }
 
-std::string CloseNamespaces(const std::vector<std::string>& parts) {
+std::string CloseNamespaces(const std::vector<std::string> &parts) {
     std::ostringstream oss;
     if (!parts.empty()) {
         oss << "\n";
     }
     for (std::size_t i = 0; i < parts.size(); ++i) {
-        const auto& part = parts[parts.size() - 1 - i];
+        const auto &part = parts[parts.size() - 1 - i];
         oss << "} // namespace " << part << "\n";
     }
     return oss.str();
 }
 
-std::string PatternSourceText(const PatternSource& pattern) {
-    return pattern.kind == PatternSource::Kind::Regex ? ("/" + pattern.text + "/") : QuoteForMessage(pattern.text);
+std::string PatternSourceText(const PatternSource &pattern) {
+    return pattern.kind == PatternSource::Kind::Regex
+               ? ("/" + pattern.text + "/")
+               : QuoteForMessage(pattern.text);
 }
 
-std::string ExpandRegexTemplate(const std::string& raw_regex,
-                                const std::function<std::string(const std::string&)>& resolve_macro) {
+std::string ExpandRegexTemplate(
+    const std::string &raw_regex,
+    const std::function<std::string(const std::string &)> &resolve_macro) {
     std::string out;
     out.reserve(raw_regex.size() + 16);
 
@@ -197,12 +158,16 @@ std::string ExpandRegexTemplate(const std::string& raw_regex,
             const std::size_t name_start = i + 2;
             const std::size_t close = raw_regex.find("}}", name_start);
             if (close == std::string::npos) {
-                throw LexerCompileException("unterminated macro placeholder in regex literal: " + raw_regex);
+                throw LexerCompileException(
+                    "unterminated macro placeholder in regex literal: " +
+                    raw_regex);
             }
 
-            const std::string name = raw_regex.substr(name_start, close - name_start);
+            const std::string name =
+                raw_regex.substr(name_start, close - name_start);
             if (name.empty()) {
-                throw LexerCompileException("empty macro placeholder in regex literal: " + raw_regex);
+                throw LexerCompileException(
+                    "empty macro placeholder in regex literal: " + raw_regex);
             }
 
             out += "(" + resolve_macro(name) + ")";
@@ -217,39 +182,40 @@ std::string ExpandRegexTemplate(const std::string& raw_regex,
     return out;
 }
 
-std::string TransitionLabel(const regex::NFATransition& transition) {
+std::string TransitionLabel(const regex::NFATransition &transition) {
     switch (transition.type) {
-        case regex::NFATransition::Type::Epsilon:
-            return "eps";
-        case regex::NFATransition::Type::Literal:
-            return "'" + EscapeDebugChar(transition.literal) + "'";
-        case regex::NFATransition::Type::Dot:
-            return ".";
-        case regex::NFATransition::Type::CharacterClass: {
-            std::string label = "[";
-            if (transition.char_class_negated) {
-                label += "^";
-            }
-            for (const auto& item : transition.char_class_items) {
-                if (item.is_range) {
-                    label += EscapeDebugChar(item.first);
-                    label += "-";
-                    label += EscapeDebugChar(item.last);
-                } else {
-                    label += EscapeDebugChar(item.first);
-                }
-            }
-            label += "]";
-            return label;
+    case regex::NFATransition::Type::Epsilon:
+        return "eps";
+    case regex::NFATransition::Type::Literal:
+        return "'" + EscapeDebugChar(transition.literal) + "'";
+    case regex::NFATransition::Type::Dot:
+        return ".";
+    case regex::NFATransition::Type::CharacterClass: {
+        std::string label = "[";
+        if (transition.char_class_negated) {
+            label += "^";
         }
+        for (const auto &item : transition.char_class_items) {
+            if (item.is_range) {
+                label += EscapeDebugChar(item.first);
+                label += "-";
+                label += EscapeDebugChar(item.last);
+            } else {
+                label += EscapeDebugChar(item.first);
+            }
+        }
+        label += "]";
+        return label;
+    }
     }
     return "?";
 }
 
-bool MatchCharacterClass(const regex::NFATransition& transition, unsigned char value) {
+bool MatchCharacterClass(const regex::NFATransition &transition,
+                         unsigned char value) {
     bool matched = false;
 
-    for (const auto& item : transition.char_class_items) {
+    for (const auto &item : transition.char_class_items) {
         const unsigned char first = static_cast<unsigned char>(item.first);
         const unsigned char last = static_cast<unsigned char>(item.last);
         if (item.is_range) {
@@ -266,22 +232,25 @@ bool MatchCharacterClass(const regex::NFATransition& transition, unsigned char v
     return transition.char_class_negated ? !matched : matched;
 }
 
-bool TransitionMatchesByte(const regex::NFATransition& transition, unsigned char value) {
+bool TransitionMatchesByte(const regex::NFATransition &transition,
+                           unsigned char value) {
     switch (transition.type) {
-        case regex::NFATransition::Type::Epsilon:
-            return false;
-        case regex::NFATransition::Type::Literal:
-            return value == static_cast<unsigned char>(transition.literal);
-        case regex::NFATransition::Type::Dot:
-            return true;
-        case regex::NFATransition::Type::CharacterClass:
-            return MatchCharacterClass(transition, value);
+    case regex::NFATransition::Type::Epsilon:
+        return false;
+    case regex::NFATransition::Type::Literal:
+        return value == static_cast<unsigned char>(transition.literal);
+    case regex::NFATransition::Type::Dot:
+        return true;
+    case regex::NFATransition::Type::CharacterClass:
+        return MatchCharacterClass(transition, value);
     }
 
     return false;
 }
 
-std::vector<std::size_t> EpsilonClosureSorted(const regex::NFA& nfa, const std::vector<std::size_t>& seeds) {
+std::vector<std::size_t>
+EpsilonClosureSorted(const regex::NFA &nfa,
+                     const std::vector<std::size_t> &seeds) {
     std::vector<std::size_t> closure;
     closure.reserve(nfa.states.size());
 
@@ -305,8 +274,9 @@ std::vector<std::size_t> EpsilonClosureSorted(const regex::NFA& nfa, const std::
         visited[state] = true;
         closure.push_back(state);
 
-        for (const auto& transition : nfa.states[state].transitions) {
-            if (transition.type == regex::NFATransition::Type::Epsilon && transition.target < nfa.states.size()) {
+        for (const auto &transition : nfa.states[state].transitions) {
+            if (transition.type == regex::NFATransition::Type::Epsilon &&
+                transition.target < nfa.states.size()) {
                 stack.push_back(transition.target);
             }
         }
@@ -317,8 +287,8 @@ std::vector<std::size_t> EpsilonClosureSorted(const regex::NFA& nfa, const std::
     return closure;
 }
 
-std::vector<std::size_t> MoveOnByte(const regex::NFA& nfa,
-                                    const std::vector<std::size_t>& states,
+std::vector<std::size_t> MoveOnByte(const regex::NFA &nfa,
+                                    const std::vector<std::size_t> &states,
                                     unsigned char value) {
     std::vector<std::size_t> moved;
 
@@ -327,7 +297,7 @@ std::vector<std::size_t> MoveOnByte(const regex::NFA& nfa,
             continue;
         }
 
-        for (const auto& transition : nfa.states[state].transitions) {
+        for (const auto &transition : nfa.states[state].transitions) {
             if (transition.type == regex::NFATransition::Type::Epsilon) {
                 continue;
             }
@@ -351,7 +321,7 @@ struct CombinedNFABuild {
     std::vector<std::size_t> owner_rule_by_state;
 };
 
-CombinedNFABuild BuildCombinedNFA(const std::vector<CompiledRule>& rules) {
+CombinedNFABuild BuildCombinedNFA(const std::vector<CompiledRule> &rules) {
     CombinedNFABuild result;
     result.nfa.states.resize(1); // super-start
     result.nfa.start_state = 0;
@@ -359,36 +329,45 @@ CombinedNFABuild BuildCombinedNFA(const std::vector<CompiledRule>& rules) {
     result.accept_rule_by_state.resize(1, kInvalidAcceptRuleIndex);
     result.owner_rule_by_state.resize(1, kInvalidAcceptRuleIndex);
 
-    for (const auto& rule : rules) {
+    for (const auto &rule : rules) {
         if (rule.nfa.states.empty()) {
-            throw LexerCompileException("internal error: rule '" + rule.name + "' has empty NFA");
+            throw LexerCompileException("internal error: rule '" + rule.name +
+                                        "' has empty NFA");
         }
 
         const std::size_t offset = result.nfa.states.size();
-        result.nfa.states.insert(result.nfa.states.end(), rule.nfa.states.begin(), rule.nfa.states.end());
-        result.accept_rule_by_state.resize(result.nfa.states.size(), kInvalidAcceptRuleIndex);
-        result.owner_rule_by_state.resize(result.nfa.states.size(), kInvalidAcceptRuleIndex);
-        for (std::size_t local_index = 0; local_index < rule.nfa.states.size(); ++local_index) {
+        result.nfa.states.insert(result.nfa.states.end(),
+                                 rule.nfa.states.begin(),
+                                 rule.nfa.states.end());
+        result.accept_rule_by_state.resize(result.nfa.states.size(),
+                                           kInvalidAcceptRuleIndex);
+        result.owner_rule_by_state.resize(result.nfa.states.size(),
+                                          kInvalidAcceptRuleIndex);
+        for (std::size_t local_index = 0; local_index < rule.nfa.states.size();
+             ++local_index) {
             result.owner_rule_by_state[offset + local_index] = rule.rule_index;
         }
 
-        for (std::size_t local_index = 0; local_index < rule.nfa.states.size(); ++local_index) {
-            auto& state = result.nfa.states[offset + local_index];
-            for (auto& transition : state.transitions) {
+        for (std::size_t local_index = 0; local_index < rule.nfa.states.size();
+             ++local_index) {
+            auto &state = result.nfa.states[offset + local_index];
+            for (auto &transition : state.transitions) {
                 transition.target += offset;
             }
         }
 
         result.nfa.states[result.nfa.start_state].transitions.push_back(
             regex::NFATransition::Epsilon(offset + rule.nfa.start_state));
-        result.accept_rule_by_state[offset + rule.nfa.accept_state] = rule.rule_index;
+        result.accept_rule_by_state[offset + rule.nfa.accept_state] =
+            rule.rule_index;
     }
 
     return result;
 }
 
-std::size_t LowestAcceptingRuleInSubset(const std::vector<std::size_t>& subset,
-                                        const std::vector<std::size_t>& accept_rule_by_state) {
+std::size_t LowestAcceptingRuleInSubset(
+    const std::vector<std::size_t> &subset,
+    const std::vector<std::size_t> &accept_rule_by_state) {
     std::size_t best = kInvalidAcceptRuleIndex;
     for (std::size_t state : subset) {
         if (state >= accept_rule_by_state.size()) {
@@ -405,8 +384,9 @@ std::size_t LowestAcceptingRuleInSubset(const std::vector<std::size_t>& subset,
     return best;
 }
 
-std::size_t ExclusiveRuleInSubset(const std::vector<std::size_t>& subset,
-                                  const std::vector<std::size_t>& owner_rule_by_state) {
+std::size_t
+ExclusiveRuleInSubset(const std::vector<std::size_t> &subset,
+                      const std::vector<std::size_t> &owner_rule_by_state) {
     std::size_t only_rule = kInvalidAcceptRuleIndex;
     for (std::size_t state : subset) {
         if (state >= owner_rule_by_state.size()) {
@@ -427,18 +407,19 @@ std::size_t ExclusiveRuleInSubset(const std::vector<std::size_t>& subset,
     return only_rule;
 }
 
-CombinedDFA BuildCombinedDFA(const std::vector<CompiledRule>& rules) {
+CombinedDFA BuildCombinedDFA(const std::vector<CompiledRule> &rules) {
     const CombinedNFABuild combined_nfa = BuildCombinedNFA(rules);
-    const regex::NFA& nfa = combined_nfa.nfa;
-    const auto& accept_rule_by_state = combined_nfa.accept_rule_by_state;
-    const auto& owner_rule_by_state = combined_nfa.owner_rule_by_state;
+    const regex::NFA &nfa = combined_nfa.nfa;
+    const auto &accept_rule_by_state = combined_nfa.accept_rule_by_state;
+    const auto &owner_rule_by_state = combined_nfa.owner_rule_by_state;
 
     CombinedDFA dfa;
     if (nfa.states.empty() || nfa.start_state >= nfa.states.size()) {
         return dfa;
     }
 
-    const std::vector<std::size_t> start_subset = EpsilonClosureSorted(nfa, {nfa.start_state});
+    const std::vector<std::size_t> start_subset =
+        EpsilonClosureSorted(nfa, {nfa.start_state});
     if (start_subset.empty()) {
         return dfa;
     }
@@ -449,8 +430,10 @@ CombinedDFA BuildCombinedDFA(const std::vector<CompiledRule>& rules) {
     subset_to_index.emplace(start_subset, 0);
     CombinedDFAState start_state{};
     start_state.transitions.fill(regex::kInvalidDFAState);
-    start_state.accepting_rule_index = LowestAcceptingRuleInSubset(start_subset, accept_rule_by_state);
-    start_state.exclusive_rule_index = ExclusiveRuleInSubset(start_subset, owner_rule_by_state);
+    start_state.accepting_rule_index =
+        LowestAcceptingRuleInSubset(start_subset, accept_rule_by_state);
+    start_state.exclusive_rule_index =
+        ExclusiveRuleInSubset(start_subset, owner_rule_by_state);
     dfa.states.push_back(start_state);
     dfa.start_state = 0;
     pending.push(start_subset);
@@ -461,7 +444,8 @@ CombinedDFA BuildCombinedDFA(const std::vector<CompiledRule>& rules) {
 
         const std::size_t dfa_state_index = subset_to_index.at(subset);
         for (std::size_t byte = 0; byte < 256; ++byte) {
-            const auto moved = MoveOnByte(nfa, subset, static_cast<unsigned char>(byte));
+            const auto moved =
+                MoveOnByte(nfa, subset, static_cast<unsigned char>(byte));
             if (moved.empty()) {
                 continue;
             }
@@ -470,12 +454,15 @@ CombinedDFA BuildCombinedDFA(const std::vector<CompiledRule>& rules) {
                 continue;
             }
 
-            auto [it, inserted] = subset_to_index.emplace(next_subset, dfa.states.size());
+            auto [it, inserted] =
+                subset_to_index.emplace(next_subset, dfa.states.size());
             if (inserted) {
                 CombinedDFAState new_state{};
                 new_state.transitions.fill(regex::kInvalidDFAState);
-                new_state.accepting_rule_index = LowestAcceptingRuleInSubset(next_subset, accept_rule_by_state);
-                new_state.exclusive_rule_index = ExclusiveRuleInSubset(next_subset, owner_rule_by_state);
+                new_state.accepting_rule_index = LowestAcceptingRuleInSubset(
+                    next_subset, accept_rule_by_state);
+                new_state.exclusive_rule_index =
+                    ExclusiveRuleInSubset(next_subset, owner_rule_by_state);
                 dfa.states.push_back(std::move(new_state));
                 pending.push(next_subset);
             }
@@ -490,12 +477,13 @@ CombinedDFA BuildCombinedDFA(const std::vector<CompiledRule>& rules) {
 std::string DescribeByte(char c) {
     const unsigned char u = static_cast<unsigned char>(c);
     std::ostringstream oss;
-    oss << "'" << EscapeDebugChar(c) << "' (0x" << std::hex << std::uppercase << std::setw(2) << std::setfill('0')
-        << static_cast<int>(u) << ")";
+    oss << "'" << EscapeDebugChar(c) << "' (0x" << std::hex << std::uppercase
+        << std::setw(2) << std::setfill('0') << static_cast<int>(u) << ")";
     return oss.str();
 }
 
-void AdvanceLocation(std::string_view text, std::size_t& line, std::size_t& column) {
+void AdvanceLocation(std::string_view text, std::size_t &line,
+                     std::size_t &column) {
     for (char c : text) {
         if (c == '\n') {
             ++line;
@@ -505,43 +493,43 @@ void AdvanceLocation(std::string_view text, std::size_t& line, std::size_t& colu
         }
     }
 }
-
 } // namespace
 
-LexerCompileException::LexerCompileException(std::string message) : std::runtime_error(std::move(message)) {}
+LexerCompileException::LexerCompileException(std::string message)
+    : std::runtime_error(std::move(message)) {}
 
-LexerRuntimeException::LexerRuntimeException(std::size_t offset, std::size_t line, std::size_t column, std::string message)
-    : std::runtime_error(std::move(message)), offset_(offset), line_(line), column_(column) {}
+LexerRuntimeException::LexerRuntimeException(std::size_t offset,
+                                             std::size_t line,
+                                             std::size_t column,
+                                             std::string message)
+    : std::runtime_error(std::move(message)), offset_(offset), line_(line),
+      column_(column) {}
 
-std::size_t LexerRuntimeException::offset() const noexcept {
-    return offset_;
-}
+std::size_t LexerRuntimeException::offset() const noexcept { return offset_; }
 
-std::size_t LexerRuntimeException::line() const noexcept {
-    return line_;
-}
+std::size_t LexerRuntimeException::line() const noexcept { return line_; }
 
-std::size_t LexerRuntimeException::column() const noexcept {
-    return column_;
-}
+std::size_t LexerRuntimeException::column() const noexcept { return column_; }
 
-CompiledLexer CompileLexerSpec(const LexerSpecAST& spec) {
+CompiledLexer CompileLexerSpec(const LexerSpecAST &spec) {
     if (spec.rules.empty()) {
         throw LexerCompileException("lexer spec must define at least one rule");
     }
 
-    std::unordered_map<std::string, const MacroDefinition*> macros;
-    for (const auto& macro : spec.macros) {
+    std::unordered_map<std::string, const MacroDefinition *> macros;
+    for (const auto &macro : spec.macros) {
         if (!macros.emplace(macro.name, &macro).second) {
-            throw LexerCompileException("duplicate macro definition: " + macro.name);
+            throw LexerCompileException("duplicate macro definition: " +
+                                        macro.name);
         }
     }
 
     {
         std::unordered_set<std::string> names;
-        for (const auto& rule : spec.rules) {
+        for (const auto &rule : spec.rules) {
             if (!names.insert(rule.name).second) {
-                throw LexerCompileException("duplicate rule definition: " + rule.name);
+                throw LexerCompileException("duplicate rule definition: " +
+                                            rule.name);
             }
         }
     }
@@ -549,35 +537,38 @@ CompiledLexer CompileLexerSpec(const LexerSpecAST& spec) {
     enum class VisitState { Unvisited, Visiting, Done };
     std::unordered_map<std::string, VisitState> macro_state;
     std::unordered_map<std::string, std::string> expanded_macros;
-    for (const auto& macro : spec.macros) {
+    for (const auto &macro : spec.macros) {
         macro_state.emplace(macro.name, VisitState::Unvisited);
     }
 
-    std::function<std::string(const PatternSource&)> expand_pattern;
-    std::function<std::string(const std::string&)> expand_macro;
+    std::function<std::string(const PatternSource &)> expand_pattern;
+    std::function<std::string(const std::string &)> expand_macro;
 
-    expand_pattern = [&](const PatternSource& pattern) -> std::string {
+    expand_pattern = [&](const PatternSource &pattern) -> std::string {
         if (pattern.kind == PatternSource::Kind::StringLiteral) {
             return EscapeRegexFromLiteral(pattern.text);
         }
         return ExpandRegexTemplate(pattern.text, expand_macro);
     };
 
-    expand_macro = [&](const std::string& name) -> std::string {
+    expand_macro = [&](const std::string &name) -> std::string {
         const auto macro_it = macros.find(name);
         if (macro_it == macros.end()) {
-            throw LexerCompileException("unknown macro referenced in regex: " + name);
+            throw LexerCompileException("unknown macro referenced in regex: " +
+                                        name);
         }
 
         auto state_it = macro_state.find(name);
         if (state_it == macro_state.end()) {
-            throw LexerCompileException("internal macro state error for: " + name);
+            throw LexerCompileException("internal macro state error for: " +
+                                        name);
         }
         if (state_it->second == VisitState::Done) {
             return expanded_macros.at(name);
         }
         if (state_it->second == VisitState::Visiting) {
-            throw LexerCompileException("recursive macro expansion detected for: " + name);
+            throw LexerCompileException(
+                "recursive macro expansion detected for: " + name);
         }
 
         state_it->second = VisitState::Visiting;
@@ -587,7 +578,7 @@ CompiledLexer CompileLexerSpec(const LexerSpecAST& spec) {
         return expanded;
     };
 
-    for (const auto& macro : spec.macros) {
+    for (const auto &macro : spec.macros) {
         (void)expand_macro(macro.name);
     }
 
@@ -596,7 +587,7 @@ CompiledLexer CompileLexerSpec(const LexerSpecAST& spec) {
     compiled.rules.reserve(spec.rules.size());
 
     for (std::size_t i = 0; i < spec.rules.size(); ++i) {
-        const auto& rule = spec.rules[i];
+        const auto &rule = spec.rules[i];
 
         CompiledRule out_rule;
         out_rule.name = rule.name;
@@ -607,10 +598,12 @@ CompiledLexer CompileLexerSpec(const LexerSpecAST& spec) {
 
         try {
             out_rule.regex_ast = regex::Parse(out_rule.expanded_regex_pattern);
-        } catch (const regex::ParseException& ex) {
+        } catch (const regex::ParseException &ex) {
             std::ostringstream oss;
-            oss << "regex parse failed for rule '" << rule.name << "' at regex offset " << ex.position() << ": " << ex.what()
-                << " (expanded pattern " << QuoteForMessage(out_rule.expanded_regex_pattern) << ")";
+            oss << "regex parse failed for rule '" << rule.name
+                << "' at regex offset " << ex.position() << ": " << ex.what()
+                << " (expanded pattern "
+                << QuoteForMessage(out_rule.expanded_regex_pattern) << ")";
             throw LexerCompileException(oss.str());
         }
 
@@ -619,14 +612,16 @@ CompiledLexer CompileLexerSpec(const LexerSpecAST& spec) {
         out_rule.minimized_dfa = regex::MinimizeDFA(out_rule.dfa);
 
         if (regex::DFAMatches(out_rule.minimized_dfa, "")) {
-            throw LexerCompileException("rule '" + rule.name + "' can match the empty string");
+            throw LexerCompileException("rule '" + rule.name +
+                                        "' can match the empty string");
         }
 
         compiled.rules.push_back(std::move(out_rule));
     }
 
     compiled.combined_dfa = BuildCombinedDFA(compiled.rules);
-    if (compiled.combined_dfa.start_state == regex::kInvalidDFAState || compiled.combined_dfa.states.empty()) {
+    if (compiled.combined_dfa.start_state == regex::kInvalidDFAState ||
+        compiled.combined_dfa.states.empty()) {
         throw LexerCompileException("failed to build combined lexer DFA");
     }
 
@@ -637,16 +632,19 @@ CompiledLexer CompileLexerSpec(std::string_view source_text) {
     return CompileLexerSpec(ParseLexerSpec(source_text));
 }
 
-std::vector<RuntimeToken> Tokenize(const CompiledLexer& lexer, std::string_view input) {
+std::vector<RuntimeToken> Tokenize(const CompiledLexer &lexer,
+                                   std::string_view input) {
     std::vector<RuntimeToken> tokens;
     std::size_t offset = 0;
     std::size_t line = 1;
     std::size_t column = 1;
 
     while (offset < input.size()) {
-        const auto& dfa = lexer.combined_dfa;
-        if (dfa.start_state == regex::kInvalidDFAState || dfa.start_state >= dfa.states.size()) {
-            throw LexerRuntimeException(offset, line, column, "combined lexer DFA is invalid");
+        const auto &dfa = lexer.combined_dfa;
+        if (dfa.start_state == regex::kInvalidDFAState ||
+            dfa.start_state >= dfa.states.size()) {
+            throw LexerRuntimeException(offset, line, column,
+                                        "combined lexer DFA is invalid");
         }
 
         std::size_t state = dfa.start_state;
@@ -659,21 +657,24 @@ std::vector<RuntimeToken> Tokenize(const CompiledLexer& lexer, std::string_view 
         }
 
         for (std::size_t i = 0; (offset + i) < input.size(); ++i) {
-            const unsigned char byte = static_cast<unsigned char>(input[offset + i]);
+            const unsigned char byte =
+                static_cast<unsigned char>(input[offset + i]);
             const std::size_t next = dfa.states[state].transitions[byte];
             if (next == regex::kInvalidDFAState || next >= dfa.states.size()) {
                 break;
             }
             state = next;
 
-            const std::size_t accept_rule = dfa.states[state].accepting_rule_index;
+            const std::size_t accept_rule =
+                dfa.states[state].accepting_rule_index;
             if (accept_rule != kInvalidAcceptRuleIndex) {
                 best_rule_index = accept_rule;
                 best_len = i + 1;
             }
         }
 
-        if (best_rule_index == kInvalidAcceptRuleIndex || !best_len.has_value() || *best_len == 0) {
+        if (best_rule_index == kInvalidAcceptRuleIndex ||
+            !best_len.has_value() || *best_len == 0) {
             std::ostringstream oss;
             oss << "no lexer rule matched input at " << line << ":" << column;
             if (offset < input.size()) {
@@ -683,13 +684,16 @@ std::vector<RuntimeToken> Tokenize(const CompiledLexer& lexer, std::string_view 
         }
 
         if (best_rule_index >= lexer.rules.size()) {
-            throw LexerRuntimeException(offset, line, column, "combined lexer DFA returned out-of-range rule index");
+            throw LexerRuntimeException(
+                offset, line, column,
+                "combined lexer DFA returned out-of-range rule index");
         }
 
-        const auto& best_rule = lexer.rules[best_rule_index];
+        const auto &best_rule = lexer.rules[best_rule_index];
         const std::string_view lexeme = input.substr(offset, *best_len);
         if (!best_rule.skip) {
-            tokens.push_back(RuntimeToken{best_rule.name, std::string(lexeme), offset, line, column});
+            tokens.push_back(RuntimeToken{best_rule.name, std::string(lexeme),
+                                          offset, line, column});
         }
 
         AdvanceLocation(lexeme, line, column);
@@ -700,31 +704,33 @@ std::vector<RuntimeToken> Tokenize(const CompiledLexer& lexer, std::string_view 
     return tokens;
 }
 
-std::string BuildCompiledASTDot(const CompiledLexer& lexer) {
+std::string BuildCompiledASTDot(const CompiledLexer &lexer) {
     std::ostringstream oss;
     oss << "digraph CompiledAST {\n";
     oss << "  rankdir=TB;\n";
     oss << "  node [shape=box];\n";
 
     std::size_t next_node_id = 0;
-    auto node_id = [&](std::size_t id) {
-        return "n" + std::to_string(id);
-    };
+    auto node_id = [&](std::size_t id) { return "n" + std::to_string(id); };
     auto add_node = [&](std::string_view label) -> std::size_t {
         const std::size_t id = next_node_id++;
-        oss << "  " << node_id(id) << " [label=\"" << EscapeDotLabel(label) << "\"];\n";
+        oss << "  " << node_id(id) << " [label=\""
+            << compiler::common::EscapeGraphvizLabel(label) << "\"];\n";
         return id;
     };
-    auto add_edge = [&](std::size_t from, std::size_t to, std::string_view label = {}) {
+    auto add_edge = [&](std::size_t from, std::size_t to,
+                        std::string_view label = {}) {
         oss << "  " << node_id(from) << " -> " << node_id(to);
         if (!label.empty()) {
-            oss << " [label=\"" << EscapeDotLabel(label) << "\"]";
+            oss << " [label=\"" << compiler::common::EscapeGraphvizLabel(label)
+                << "\"]";
         }
         oss << ";\n";
     };
-    auto make_label = [](std::string_view name, std::initializer_list<std::string> properties = {}) {
+    auto make_label = [](std::string_view name,
+                         std::initializer_list<std::string> properties = {}) {
         std::string label(name);
-        for (const auto& property : properties) {
+        for (const auto &property : properties) {
             if (!property.empty()) {
                 label += "\n";
                 label += property;
@@ -733,56 +739,64 @@ std::string BuildCompiledASTDot(const CompiledLexer& lexer) {
         return label;
     };
 
-    auto format_char_class_items = [](const std::vector<regex::CharacterClassItem>& items) {
-        std::string text;
-        for (std::size_t i = 0; i < items.size(); ++i) {
-            if (i > 0) {
-                text += ", ";
+    auto format_char_class_items =
+        [](const std::vector<regex::CharacterClassItem> &items) {
+            std::string text;
+            for (std::size_t i = 0; i < items.size(); ++i) {
+                if (i > 0) {
+                    text += ", ";
+                }
+                const auto &item = items[i];
+                if (item.is_range) {
+                    text += EscapeDebugChar(item.first);
+                    text += "-";
+                    text += EscapeDebugChar(item.last);
+                } else {
+                    text += EscapeDebugChar(item.first);
+                }
             }
-            const auto& item = items[i];
-            if (item.is_range) {
-                text += EscapeDebugChar(item.first);
-                text += "-";
-                text += EscapeDebugChar(item.last);
-            } else {
-                text += EscapeDebugChar(item.first);
-            }
-        }
-        return text;
-    };
+            return text;
+        };
 
-    std::function<std::size_t(const regex::RegexNode&)> add_regex_ast = [&](const regex::RegexNode& node) -> std::size_t {
+    std::function<std::size_t(const regex::RegexNode &)> add_regex_ast =
+        [&](const regex::RegexNode &node) -> std::size_t {
         std::string label;
         switch (node.type) {
-            case regex::RegexNode::Type::Empty:
-                label = make_label("Empty");
-                break;
-            case regex::RegexNode::Type::Literal:
-                label = make_label("Literal", {"value='" + EscapeDebugChar(node.literal) + "'"});
-                break;
-            case regex::RegexNode::Type::Dot:
-                label = make_label("Dot");
-                break;
-            case regex::RegexNode::Type::Sequence:
-                label = make_label("Sequence");
-                break;
-            case regex::RegexNode::Type::Alternation:
-                label = make_label("Alternation");
-                break;
-            case regex::RegexNode::Type::Repetition:
-                label = make_label("Repetition",
-                                   {"min=" + std::to_string(node.repetition.min),
-                                    "max=" +
-                                        (node.repetition.max.has_value() ? std::to_string(*node.repetition.max) : "inf")});
-                break;
-            case regex::RegexNode::Type::Group:
-                label = make_label("Group");
-                break;
-            case regex::RegexNode::Type::CharacterClass:
-                label = make_label("CharacterClass",
-                                   {"negated=" + std::string(node.char_class_negated ? "true" : "false"),
-                                    "items=[" + format_char_class_items(node.char_class_items) + "]"});
-                break;
+        case regex::RegexNode::Type::Empty:
+            label = make_label("Empty");
+            break;
+        case regex::RegexNode::Type::Literal:
+            label = make_label(
+                "Literal", {"value='" + EscapeDebugChar(node.literal) + "'"});
+            break;
+        case regex::RegexNode::Type::Dot:
+            label = make_label("Dot");
+            break;
+        case regex::RegexNode::Type::Sequence:
+            label = make_label("Sequence");
+            break;
+        case regex::RegexNode::Type::Alternation:
+            label = make_label("Alternation");
+            break;
+        case regex::RegexNode::Type::Repetition:
+            label =
+                make_label("Repetition",
+                           {"min=" + std::to_string(node.repetition.min),
+                            "max=" + (node.repetition.max.has_value()
+                                          ? std::to_string(*node.repetition.max)
+                                          : "inf")});
+            break;
+        case regex::RegexNode::Type::Group:
+            label = make_label("Group");
+            break;
+        case regex::RegexNode::Type::CharacterClass:
+            label = make_label(
+                "CharacterClass",
+                {"negated=" +
+                     std::string(node.char_class_negated ? "true" : "false"),
+                 "items=[" + format_char_class_items(node.char_class_items) +
+                     "]"});
+            break;
         }
 
         const std::size_t id = add_node(label);
@@ -797,49 +811,58 @@ std::string BuildCompiledASTDot(const CompiledLexer& lexer) {
     const std::size_t spec_id = add_node("LexerSpecAST");
     add_edge(root_id, spec_id);
 
-    add_edge(spec_id, add_node(make_label("Lexer", {"name=" + lexer.spec.lexer_name})));
-    add_edge(spec_id, add_node(make_label("TokenEnum", {"name=" + lexer.spec.token_enum_name})));
+    add_edge(spec_id,
+             add_node(make_label("Lexer", {"name=" + lexer.spec.lexer_name})));
+    add_edge(spec_id,
+             add_node(make_label("TokenEnum",
+                                 {"name=" + lexer.spec.token_enum_name})));
 
     const std::size_t namespace_id = add_node("Namespace");
     add_edge(spec_id, namespace_id);
     if (lexer.spec.namespace_parts.empty()) {
         add_edge(namespace_id, add_node(make_label("GlobalNamespace")));
     } else {
-        for (const auto& part : lexer.spec.namespace_parts) {
-            add_edge(namespace_id, add_node(make_label("NamespacePart", {"name=" + part})));
+        for (const auto &part : lexer.spec.namespace_parts) {
+            add_edge(namespace_id,
+                     add_node(make_label("NamespacePart", {"name=" + part})));
         }
     }
 
     const std::size_t macros_id = add_node("Macros");
     add_edge(spec_id, macros_id);
     for (std::size_t i = 0; i < lexer.spec.macros.size(); ++i) {
-        const auto& macro = lexer.spec.macros[i];
-        const std::size_t macro_id =
-            add_node(make_label("Macro", {"name=" + macro.name, "index=" + std::to_string(i)}));
+        const auto &macro = lexer.spec.macros[i];
+        const std::size_t macro_id = add_node(make_label(
+            "Macro", {"name=" + macro.name, "index=" + std::to_string(i)}));
         add_edge(macros_id, macro_id);
         add_edge(macro_id,
-                 add_node(make_label("Pattern",
-                                     {"kind=" + std::string(macro.pattern.kind == PatternSource::Kind::Regex ? "regex"
-                                                                                                             : "string"),
-                                      "text=" + PatternSourceText(macro.pattern)})));
+                 add_node(make_label(
+                     "Pattern",
+                     {"kind=" + std::string(macro.pattern.kind ==
+                                                    PatternSource::Kind::Regex
+                                                ? "regex"
+                                                : "string"),
+                      "text=" + PatternSourceText(macro.pattern)})));
     }
 
     const std::size_t rules_id = add_node("Rules");
     add_edge(root_id, rules_id);
-    for (const auto& rule : lexer.rules) {
-        const auto& source_rule = lexer.spec.rules[rule.rule_index];
-        const std::size_t rule_id =
-            add_node(make_label("Rule",
-                                {"index=" + std::to_string(rule.rule_index),
-                                 "name=" + rule.name,
-                                 "skip=" + std::string(rule.skip ? "true" : "false")}));
+    for (const auto &rule : lexer.rules) {
+        const auto &source_rule = lexer.spec.rules[rule.rule_index];
+        const std::size_t rule_id = add_node(make_label(
+            "Rule",
+            {"index=" + std::to_string(rule.rule_index), "name=" + rule.name,
+             "skip=" + std::string(rule.skip ? "true" : "false")}));
         add_edge(rules_id, rule_id);
 
         add_edge(rule_id,
-                 add_node(make_label("Pattern",
-                                     {"kind=" + std::string(source_rule.pattern.kind == PatternSource::Kind::Regex ? "regex"
-                                                                                                                   : "string"),
-                                      "text=" + PatternSourceText(source_rule.pattern)})));
+                 add_node(make_label(
+                     "Pattern",
+                     {"kind=" + std::string(source_rule.pattern.kind ==
+                                                    PatternSource::Kind::Regex
+                                                ? "regex"
+                                                : "string"),
+                      "text=" + PatternSourceText(source_rule.pattern)})));
 
         const std::size_t regex_ast_id = add_node("Regex AST");
         add_edge(rule_id, regex_ast_id);
@@ -851,7 +874,8 @@ std::string BuildCompiledASTDot(const CompiledLexer& lexer) {
     return oss.str();
 }
 
-std::string NFAToGraphvizDot(const regex::NFA& nfa, std::string_view graph_name) {
+std::string NFAToGraphvizDot(const regex::NFA &nfa,
+                             std::string_view graph_name) {
     std::ostringstream oss;
     oss << "digraph " << SanitizeIdentifier(graph_name, "nfa") << " {\n";
     oss << "  rankdir=LR;\n";
@@ -861,14 +885,17 @@ std::string NFAToGraphvizDot(const regex::NFA& nfa, std::string_view graph_name)
     }
 
     for (std::size_t i = 0; i < nfa.states.size(); ++i) {
-        oss << "  s" << i << " [shape=" << ((i == nfa.accept_state) ? "doublecircle" : "circle")
+        oss << "  s" << i << " [shape="
+            << ((i == nfa.accept_state) ? "doublecircle" : "circle")
             << ", label=\"s" << i << "\"];\n";
     }
 
     for (std::size_t i = 0; i < nfa.states.size(); ++i) {
-        for (const auto& transition : nfa.states[i].transitions) {
+        for (const auto &transition : nfa.states[i].transitions) {
             oss << "  s" << i << " -> s" << transition.target << " [label=\""
-                << EscapeDotLabel(TransitionLabel(transition)) << "\"];\n";
+                << compiler::common::EscapeGraphvizLabel(
+                       TransitionLabel(transition))
+                << "\"];\n";
         }
     }
 
@@ -876,17 +903,20 @@ std::string NFAToGraphvizDot(const regex::NFA& nfa, std::string_view graph_name)
     return oss.str();
 }
 
-std::string DFAToGraphvizDot(const regex::DFA& dfa, std::string_view graph_name) {
+std::string DFAToGraphvizDot(const regex::DFA &dfa,
+                             std::string_view graph_name) {
     std::ostringstream oss;
     oss << "digraph " << SanitizeIdentifier(graph_name, "dfa") << " {\n";
     oss << "  rankdir=LR;\n";
     oss << "  __start [shape=point];\n";
-    if (dfa.start_state != regex::kInvalidDFAState && dfa.start_state < dfa.states.size()) {
+    if (dfa.start_state != regex::kInvalidDFAState &&
+        dfa.start_state < dfa.states.size()) {
         oss << "  __start -> s" << dfa.start_state << ";\n";
     }
 
     for (std::size_t i = 0; i < dfa.states.size(); ++i) {
-        oss << "  s" << i << " [shape=" << (dfa.states[i].is_accepting ? "doublecircle" : "circle")
+        oss << "  s" << i << " [shape="
+            << (dfa.states[i].is_accepting ? "doublecircle" : "circle")
             << ", label=\"s" << i << "\"];\n";
     }
 
@@ -894,13 +924,14 @@ std::string DFAToGraphvizDot(const regex::DFA& dfa, std::string_view graph_name)
         std::unordered_map<std::size_t, std::vector<unsigned>> groups;
         for (unsigned byte = 0; byte < 256; ++byte) {
             const std::size_t target = dfa.states[i].transitions[byte];
-            if (target == regex::kInvalidDFAState || target >= dfa.states.size()) {
+            if (target == regex::kInvalidDFAState ||
+                target >= dfa.states.size()) {
                 continue;
             }
             groups[target].push_back(byte);
         }
 
-        for (const auto& [target, bytes] : groups) {
+        for (const auto &[target, bytes] : groups) {
             std::string label;
             for (std::size_t j = 0; j < bytes.size(); ++j) {
                 if (j > 0) {
@@ -908,7 +939,8 @@ std::string DFAToGraphvizDot(const regex::DFA& dfa, std::string_view graph_name)
                 }
                 label += EscapeDebugChar(static_cast<char>(bytes[j]));
             }
-            oss << "  s" << i << " -> s" << target << " [label=\"" << EscapeDotLabel(label) << "\"];\n";
+            oss << "  s" << i << " -> s" << target << " [label=\""
+                << compiler::common::EscapeGraphvizLabel(label) << "\"];\n";
         }
     }
 
@@ -916,36 +948,47 @@ std::string DFAToGraphvizDot(const regex::DFA& dfa, std::string_view graph_name)
     return oss.str();
 }
 
-std::string CombinedDFAToGraphvizDot(const CompiledLexer& lexer, std::string_view graph_name) {
-    const auto& dfa = lexer.combined_dfa;
+std::string CombinedDFAToGraphvizDot(const CompiledLexer &lexer,
+                                     std::string_view graph_name) {
+    const auto &dfa = lexer.combined_dfa;
 
     std::ostringstream oss;
     oss << "digraph " << SanitizeIdentifier(graph_name, "lexer_dfa") << " {\n";
     oss << "  rankdir=LR;\n";
     oss << "  __start [shape=point];\n";
-    if (dfa.start_state != regex::kInvalidDFAState && dfa.start_state < dfa.states.size()) {
+    if (dfa.start_state != regex::kInvalidDFAState &&
+        dfa.start_state < dfa.states.size()) {
         oss << "  __start -> s" << dfa.start_state << ";\n";
     }
 
     auto emit_state_node = [&](std::size_t i, std::string_view indent) {
-        const bool accepting = dfa.states[i].accepting_rule_index != kInvalidAcceptRuleIndex;
+        const bool accepting =
+            dfa.states[i].accepting_rule_index != kInvalidAcceptRuleIndex;
         std::string label = "s" + std::to_string(i);
-        if (accepting && dfa.states[i].accepting_rule_index < lexer.rules.size()) {
+        if (accepting &&
+            dfa.states[i].accepting_rule_index < lexer.rules.size()) {
             label += "\n";
-            label += lexer.rules[dfa.states[i].accepting_rule_index].skip ? "skip " : "token ";
+            label += lexer.rules[dfa.states[i].accepting_rule_index].skip
+                         ? "skip "
+                         : "token ";
             label += lexer.rules[dfa.states[i].accepting_rule_index].name;
         }
-        if (!accepting && dfa.states[i].exclusive_rule_index == kInvalidAcceptRuleIndex) {
+        if (!accepting &&
+            dfa.states[i].exclusive_rule_index == kInvalidAcceptRuleIndex) {
             label += "\nshared";
         }
-        oss << indent << "s" << i << " [shape=" << (accepting ? "doublecircle" : "circle")
-            << ", label=\"" << EscapeDotLabel(label) << "\"];\n";
+        oss << indent << "s" << i
+            << " [shape=" << (accepting ? "doublecircle" : "circle")
+            << ", label=\"" << compiler::common::EscapeGraphvizLabel(label)
+            << "\"];\n";
     };
 
     std::vector<bool> emitted_in_cluster(dfa.states.size(), false);
-    for (std::size_t rule_index = 0; rule_index < lexer.rules.size(); ++rule_index) {
+    for (std::size_t rule_index = 0; rule_index < lexer.rules.size();
+         ++rule_index) {
         std::vector<std::size_t> cluster_states;
-        for (std::size_t state_index = 0; state_index < dfa.states.size(); ++state_index) {
+        for (std::size_t state_index = 0; state_index < dfa.states.size();
+             ++state_index) {
             if (dfa.states[state_index].exclusive_rule_index == rule_index) {
                 cluster_states.push_back(state_index);
             }
@@ -959,7 +1002,10 @@ std::string CombinedDFAToGraphvizDot(const CompiledLexer& lexer, std::string_vie
         oss << "    style=dashed;\n";
         oss << "    color=gray50;\n";
         oss << "    label=\"rule " << rule_index << ": "
-            << EscapeDotLabel(std::string(lexer.rules[rule_index].skip ? "skip " : "token ") + lexer.rules[rule_index].name)
+            << compiler::common::EscapeGraphvizLabel(
+                   std::string(lexer.rules[rule_index].skip ? "skip "
+                                                            : "token ") +
+                   lexer.rules[rule_index].name)
             << "\";\n";
         for (std::size_t state_index : cluster_states) {
             emitted_in_cluster[state_index] = true;
@@ -979,13 +1025,14 @@ std::string CombinedDFAToGraphvizDot(const CompiledLexer& lexer, std::string_vie
         std::unordered_map<std::size_t, std::vector<unsigned>> groups;
         for (unsigned byte = 0; byte < 256; ++byte) {
             const std::size_t target = dfa.states[i].transitions[byte];
-            if (target == regex::kInvalidDFAState || target >= dfa.states.size()) {
+            if (target == regex::kInvalidDFAState ||
+                target >= dfa.states.size()) {
                 continue;
             }
             groups[target].push_back(byte);
         }
 
-        for (const auto& [target, bytes] : groups) {
+        for (const auto &[target, bytes] : groups) {
             std::string label;
             for (std::size_t j = 0; j < bytes.size(); ++j) {
                 if (j > 0) {
@@ -993,7 +1040,8 @@ std::string CombinedDFAToGraphvizDot(const CompiledLexer& lexer, std::string_vie
                 }
                 label += EscapeDebugChar(static_cast<char>(bytes[j]));
             }
-            oss << "  s" << i << " -> s" << target << " [label=\"" << EscapeDotLabel(label) << "\"];\n";
+            oss << "  s" << i << " -> s" << target << " [label=\""
+                << compiler::common::EscapeGraphvizLabel(label) << "\"];\n";
         }
     }
 
@@ -1001,21 +1049,28 @@ std::string CombinedDFAToGraphvizDot(const CompiledLexer& lexer, std::string_vie
     return oss.str();
 }
 
-GeneratedLexerFiles GenerateCppLexer(const CompiledLexer& lexer,
+GeneratedLexerFiles GenerateCppLexer(const CompiledLexer &lexer,
                                      std::string_view header_filename,
                                      std::string_view source_filename) {
-    const std::string lexer_name = SanitizeIdentifier(lexer.spec.lexer_name, "GeneratedLexer");
-    const std::string token_enum_name = SanitizeIdentifier(lexer.spec.token_enum_name, "TokenKind");
+    const std::string lexer_name =
+        SanitizeIdentifier(lexer.spec.lexer_name, "GeneratedLexer");
+    const std::string token_enum_name =
+        SanitizeIdentifier(lexer.spec.token_enum_name, "TokenKind");
 
     GeneratedLexerFiles files;
-    files.header_filename = header_filename.empty() ? (lexer_name + ".h") : std::string(header_filename);
-    files.source_filename = source_filename.empty() ? (lexer_name + ".cpp") : std::string(source_filename);
+    files.header_filename = header_filename.empty()
+                                ? (lexer_name + ".h")
+                                : std::string(header_filename);
+    files.source_filename = source_filename.empty()
+                                ? (lexer_name + ".cpp")
+                                : std::string(source_filename);
 
     std::vector<std::size_t> emitting_rule_indices;
     std::unordered_map<std::size_t, std::size_t> rule_to_token_kind_index;
-    for (const auto& rule : lexer.rules) {
+    for (const auto &rule : lexer.rules) {
         if (!rule.skip) {
-            rule_to_token_kind_index.emplace(rule.rule_index, emitting_rule_indices.size());
+            rule_to_token_kind_index.emplace(rule.rule_index,
+                                             emitting_rule_indices.size());
             emitting_rule_indices.push_back(rule.rule_index);
         }
     }
@@ -1028,7 +1083,9 @@ GeneratedLexerFiles GenerateCppLexer(const CompiledLexer& lexer,
     header << OpenNamespaces(lexer.spec.namespace_parts);
     header << "enum class " << token_enum_name << " {\n";
     for (std::size_t rule_index : emitting_rule_indices) {
-        header << "    " << SanitizeIdentifier(lexer.rules[rule_index].name, "Token") << ",\n";
+        header << "    "
+               << SanitizeIdentifier(lexer.rules[rule_index].name, "Token")
+               << ",\n";
     }
     header << "    EndOfFile,\n";
     header << "};\n\n";
@@ -1066,24 +1123,29 @@ GeneratedLexerFiles GenerateCppLexer(const CompiledLexer& lexer,
     source << "    bool skip;\n";
     source << "    int token_kind_index;\n";
     source << "};\n\n";
-    source << "void AdvanceLocation(std::string_view text, std::size_t& line, std::size_t& column) {\n";
+    source << "void AdvanceLocation(std::string_view text, std::size_t& line, "
+              "std::size_t& column) {\n";
     source << "    for (char c : text) {\n";
-    source << "        if (c == '\\n') { ++line; column = 1; } else { ++column; }\n";
+    source << "        if (c == '\\n') { ++line; column = 1; } else { "
+              "++column; }\n";
     source << "    }\n";
     source << "}\n\n";
 
     source << "static const CombinedDFAState kCombinedDFAStates[] = {\n";
-    for (const auto& state : lexer.combined_dfa.states) {
-        const int accept_rule_index = (state.accepting_rule_index == kInvalidAcceptRuleIndex)
-                                          ? -1
-                                          : static_cast<int>(state.accepting_rule_index);
-        source << "    CombinedDFAState{" << accept_rule_index << ", std::array<std::uint32_t, 256>{";
+    for (const auto &state : lexer.combined_dfa.states) {
+        const int accept_rule_index =
+            (state.accepting_rule_index == kInvalidAcceptRuleIndex)
+                ? -1
+                : static_cast<int>(state.accepting_rule_index);
+        source << "    CombinedDFAState{" << accept_rule_index
+               << ", std::array<std::uint32_t, 256>{";
         for (std::size_t byte = 0; byte < 256; ++byte) {
             if (byte > 0) {
                 source << ", ";
             }
             const std::size_t next = state.transitions[byte];
-            if (next == regex::kInvalidDFAState || next >= lexer.combined_dfa.states.size()) {
+            if (next == regex::kInvalidDFAState ||
+                next >= lexer.combined_dfa.states.size()) {
                 source << "kInvalidState";
             } else {
                 source << static_cast<std::uint32_t>(next) << "u";
@@ -1095,55 +1157,77 @@ GeneratedLexerFiles GenerateCppLexer(const CompiledLexer& lexer,
 
     source << "static const RuleInfo kRuleInfos[] = {\n";
     for (std::size_t i = 0; i < lexer.rules.size(); ++i) {
-        const auto& rule = lexer.rules[i];
+        const auto &rule = lexer.rules[i];
         const auto it = rule_to_token_kind_index.find(rule.rule_index);
-        const int token_index = (it == rule_to_token_kind_index.end()) ? -1 : static_cast<int>(it->second);
-        source << "    RuleInfo{" << (rule.skip ? "true" : "false") << ", " << token_index << "},\n";
+        const int token_index = (it == rule_to_token_kind_index.end())
+                                    ? -1
+                                    : static_cast<int>(it->second);
+        source << "    RuleInfo{" << (rule.skip ? "true" : "false") << ", "
+               << token_index << "},\n";
     }
     source << "};\n\n";
     source << "} // namespace\n\n";
 
     source << OpenNamespaces(lexer.spec.namespace_parts);
-    source << lexer_name << "::" << lexer_name << "(std::string_view input) : input_(input) {}\n\n";
+    source << lexer_name << "::" << lexer_name
+           << "(std::string_view input) : input_(input) {}\n\n";
     source << "std::vector<Token> " << lexer_name << "::Tokenize() const {\n";
     source << "    std::vector<Token> tokens;\n";
     source << "    std::size_t offset = 0;\n";
     source << "    std::size_t line = 1;\n";
     source << "    std::size_t column = 1;\n";
     source << "    while (offset < input_.size()) {\n";
-    source << "        if (" << lexer.combined_dfa.states.size() << "u == 0) throw std::runtime_error(\"invalid lexer DFA\");\n";
+    source << "        if (" << lexer.combined_dfa.states.size()
+           << "u == 0) throw std::runtime_error(\"invalid lexer DFA\");\n";
     source << "        std::uint32_t state = "
            << (lexer.combined_dfa.start_state == regex::kInvalidDFAState
                    ? static_cast<std::uint32_t>(0xFFFFFFFFu)
                    : static_cast<std::uint32_t>(lexer.combined_dfa.start_state))
            << "u;\n";
-    source << "        if (state == kInvalidState || state >= " << lexer.combined_dfa.states.size()
+    source << "        if (state == kInvalidState || state >= "
+           << lexer.combined_dfa.states.size()
            << "u) throw std::runtime_error(\"invalid lexer DFA\");\n";
     source << "        std::size_t best_len = static_cast<std::size_t>(-1);\n";
     source << "        int best_rule_index = -1;\n";
-    source << "        if (kCombinedDFAStates[state].accepting_rule_index >= 0) { best_len = 0; best_rule_index = kCombinedDFAStates[state].accepting_rule_index; }\n";
-    source << "        for (std::size_t i = 0; (offset + i) < input_.size(); ++i) {\n";
-    source << "            const std::uint32_t next = kCombinedDFAStates[state].transitions[static_cast<unsigned char>(input_[offset + i])];\n";
-    source << "            if (next == kInvalidState || next >= " << lexer.combined_dfa.states.size() << "u) break;\n";
+    source
+        << "        if (kCombinedDFAStates[state].accepting_rule_index >= 0) "
+           "{ best_len = 0; best_rule_index = "
+           "kCombinedDFAStates[state].accepting_rule_index; }\n";
+    source << "        for (std::size_t i = 0; (offset + i) < input_.size(); "
+              "++i) {\n";
+    source << "            const std::uint32_t next = "
+              "kCombinedDFAStates[state].transitions[static_cast<unsigned "
+              "char>(input_[offset + i])];\n";
+    source << "            if (next == kInvalidState || next >= "
+           << lexer.combined_dfa.states.size() << "u) break;\n";
     source << "            state = next;\n";
-    source << "            if (kCombinedDFAStates[state].accepting_rule_index >= 0) {\n";
+    source
+        << "            if (kCombinedDFAStates[state].accepting_rule_index >= "
+           "0) {\n";
     source << "                best_len = i + 1;\n";
-    source << "                best_rule_index = kCombinedDFAStates[state].accepting_rule_index;\n";
+    source << "                best_rule_index = "
+              "kCombinedDFAStates[state].accepting_rule_index;\n";
     source << "            }\n";
     source << "        }\n";
-    source << "        if (best_rule_index < 0 || best_len == static_cast<std::size_t>(-1) || best_len == 0) {\n";
-    source << "            throw std::runtime_error(\"lexing failed: no rule matched input\");\n";
+    source << "        if (best_rule_index < 0 || best_len == "
+              "static_cast<std::size_t>(-1) || best_len == 0) {\n";
+    source << "            throw std::runtime_error(\"lexing failed: no rule "
+              "matched input\");\n";
     source << "        }\n";
-    source << "        const std::string_view lexeme = input_.substr(offset, best_len);\n";
-    source << "        const RuleInfo& rule = kRuleInfos[static_cast<std::size_t>(best_rule_index)];\n";
+    source << "        const std::string_view lexeme = input_.substr(offset, "
+              "best_len);\n";
+    source << "        const RuleInfo& rule = "
+              "kRuleInfos[static_cast<std::size_t>(best_rule_index)];\n";
     source << "        if (!rule.skip) {\n";
-    source << "            tokens.push_back(Token{static_cast<" << token_enum_name
+    source << "            tokens.push_back(Token{static_cast<"
+           << token_enum_name
            << ">(rule.token_kind_index), lexeme, offset, line, column});\n";
     source << "        }\n";
     source << "        AdvanceLocation(lexeme, line, column);\n";
     source << "        offset += best_len;\n";
     source << "    }\n";
-    source << "    tokens.push_back(Token{" << token_enum_name << "::EndOfFile, std::string_view{}, offset, line, column});\n";
+    source << "    tokens.push_back(Token{" << token_enum_name
+           << "::EndOfFile, std::string_view{}, offset, line, column});\n";
     source << "    return tokens;\n";
     source << "}\n";
     source << CloseNamespaces(lexer.spec.namespace_parts);
@@ -1151,5 +1235,4 @@ GeneratedLexerFiles GenerateCppLexer(const CompiledLexer& lexer,
 
     return files;
 }
-
 } // namespace compiler::lexgen
