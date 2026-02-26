@@ -39,11 +39,6 @@ const char *TokenKindName(GeneratedTokenKind kind) {
     return "token";
 }
 
-std::string SanitizeIdentifier(std::string_view text,
-                               std::string_view fallback) {
-    return compiler::common::SanitizeIdentifier(text, fallback);
-}
-
 class Parser {
   public:
     explicit Parser(std::string_view source_text) {
@@ -270,7 +265,7 @@ std::string ToDebugString(const GrammarSpecAST &spec) {
 std::string GrammarSpecASTToGraphvizDot(const GrammarSpecAST &spec,
                                         std::string_view graph_name) {
     std::ostringstream oss;
-    oss << "digraph " << SanitizeIdentifier(graph_name, "grammar_ast")
+    oss << "digraph " << compiler::common::SanitizeIdentifier(graph_name, "grammar_ast")
         << " {\n";
     oss << "  rankdir=TB;\n";
     oss << "  node [shape=box];\n";

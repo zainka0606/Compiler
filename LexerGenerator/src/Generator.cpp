@@ -99,11 +99,6 @@ std::string EscapeDebugChar(char c) {
     }
 }
 
-std::string SanitizeIdentifier(std::string_view text,
-                               std::string_view fallback) {
-    return compiler::common::SanitizeIdentifier(text, fallback);
-}
-
 std::string OpenNamespaces(const std::vector<std::string> &parts) {
     std::ostringstream oss;
     for (const auto &part : parts) {
@@ -877,7 +872,7 @@ std::string BuildCompiledASTDot(const CompiledLexer &lexer) {
 std::string NFAToGraphvizDot(const regex::NFA &nfa,
                              std::string_view graph_name) {
     std::ostringstream oss;
-    oss << "digraph " << SanitizeIdentifier(graph_name, "nfa") << " {\n";
+    oss << "digraph " << compiler::common::SanitizeIdentifier(graph_name, "nfa") << " {\n";
     oss << "  rankdir=LR;\n";
     oss << "  __start [shape=point];\n";
     if (nfa.start_state < nfa.states.size()) {
@@ -906,7 +901,7 @@ std::string NFAToGraphvizDot(const regex::NFA &nfa,
 std::string DFAToGraphvizDot(const regex::DFA &dfa,
                              std::string_view graph_name) {
     std::ostringstream oss;
-    oss << "digraph " << SanitizeIdentifier(graph_name, "dfa") << " {\n";
+    oss << "digraph " << compiler::common::SanitizeIdentifier(graph_name, "dfa") << " {\n";
     oss << "  rankdir=LR;\n";
     oss << "  __start [shape=point];\n";
     if (dfa.start_state != regex::kInvalidDFAState &&
@@ -953,7 +948,7 @@ std::string CombinedDFAToGraphvizDot(const CompiledLexer &lexer,
     const auto &dfa = lexer.combined_dfa;
 
     std::ostringstream oss;
-    oss << "digraph " << SanitizeIdentifier(graph_name, "lexer_dfa") << " {\n";
+    oss << "digraph " << compiler::common::SanitizeIdentifier(graph_name, "lexer_dfa") << " {\n";
     oss << "  rankdir=LR;\n";
     oss << "  __start [shape=point];\n";
     if (dfa.start_state != regex::kInvalidDFAState &&
@@ -1053,9 +1048,9 @@ GeneratedLexerFiles GenerateCppLexer(const CompiledLexer &lexer,
                                      std::string_view header_filename,
                                      std::string_view source_filename) {
     const std::string lexer_name =
-        SanitizeIdentifier(lexer.spec.lexer_name, "GeneratedLexer");
+        compiler::common::SanitizeIdentifier(lexer.spec.lexer_name, "GeneratedLexer");
     const std::string token_enum_name =
-        SanitizeIdentifier(lexer.spec.token_enum_name, "TokenKind");
+        compiler::common::SanitizeIdentifier(lexer.spec.token_enum_name, "TokenKind");
 
     GeneratedLexerFiles files;
     files.header_filename = header_filename.empty()
@@ -1084,7 +1079,7 @@ GeneratedLexerFiles GenerateCppLexer(const CompiledLexer &lexer,
     header << "enum class " << token_enum_name << " {\n";
     for (std::size_t rule_index : emitting_rule_indices) {
         header << "    "
-               << SanitizeIdentifier(lexer.rules[rule_index].name, "Token")
+               << compiler::common::SanitizeIdentifier(lexer.rules[rule_index].name, "Token")
                << ",\n";
     }
     header << "    EndOfFile,\n";

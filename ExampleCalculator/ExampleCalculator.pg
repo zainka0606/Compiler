@@ -1,0 +1,275 @@
+grammar CalculatorExpr;
+start Expr;
+
+token ID;
+token NUMBER;
+token PLUS;
+token MINUS;
+token STAR;
+token SLASH;
+token CARET;
+token LPAREN;
+token RPAREN;
+token COMMA;
+
+astbase Expr {
+  virtual eval() -> double;
+};
+ast Number : Expr(value: string) {
+  override eval() -> double = `
+char* end = nullptr;
+const double out = std::strtod(value().c_str(), &end);
+if (end == nullptr || *end != '\0') {
+    throw std::runtime_error("invalid number literal: " + value());
+}
+return out;
+`;
+};
+ast Identifier : Expr(name: string) {
+  override eval() -> double = `
+if (name() == "pi") {
+    return std::acos(-1.0);
+}
+if (name() == "e") {
+    return std::exp(1.0);
+}
+if (name() == "tau") {
+    return 2.0 * std::acos(-1.0);
+}
+throw std::runtime_error("unknown identifier: " + name());
+`;
+};
+ast Negate : Expr(expr: Expr) {
+  override eval() -> double = `
+return -expr().eval();
+`;
+};
+ast Add : Expr(lhs: Expr, rhs: Expr) {
+  override eval() -> double = `
+return lhs().eval() + rhs().eval();
+`;
+};
+ast Subtract : Expr(lhs: Expr, rhs: Expr) {
+  override eval() -> double = `
+return lhs().eval() - rhs().eval();
+`;
+};
+ast Multiply : Expr(lhs: Expr, rhs: Expr) {
+  override eval() -> double = `
+return lhs().eval() * rhs().eval();
+`;
+};
+ast Divide : Expr(lhs: Expr, rhs: Expr) {
+  override eval() -> double = `
+const double rhs_value = rhs().eval();
+if (rhs_value == 0.0) {
+    throw std::runtime_error("division by zero");
+}
+return lhs().eval() / rhs_value;
+`;
+};
+ast Pow : Expr(lhs: Expr, rhs: Expr) {
+  override eval() -> double = `
+return std::pow(lhs().eval(), rhs().eval());
+`;
+};
+ast Call0 : Expr(name: string) {
+  override eval() -> double = `
+const std::vector<double> args;
+const auto require_count = [&](std::size_t expected) {
+    if (args.size() != expected) {
+        throw std::runtime_error("function '" + name() + "' expects " + std::to_string(expected) +
+                                 " argument(s), got " + std::to_string(args.size()));
+    }
+};
+const auto require_min_count = [&](std::size_t minimum) {
+    if (args.size() < minimum) {
+        throw std::runtime_error("function '" + name() + "' expects at least " + std::to_string(minimum) +
+                                 " argument(s), got " + std::to_string(args.size()));
+    }
+};
+if (name() == "sin") {
+    require_count(1);
+    return std::sin(args[0]);
+}
+if (name() == "cos") {
+    require_count(1);
+    return std::cos(args[0]);
+}
+if (name() == "tan") {
+    require_count(1);
+    return std::tan(args[0]);
+}
+if (name() == "sqrt") {
+    require_count(1);
+    return std::sqrt(args[0]);
+}
+if (name() == "abs") {
+    require_count(1);
+    return std::fabs(args[0]);
+}
+if (name() == "exp") {
+    require_count(1);
+    return std::exp(args[0]);
+}
+if (name() == "ln") {
+    require_count(1);
+    return std::log(args[0]);
+}
+if (name() == "log10") {
+    require_count(1);
+    return std::log10(args[0]);
+}
+if (name() == "pow") {
+    require_count(2);
+    return std::pow(args[0], args[1]);
+}
+if (name() == "min") {
+    require_min_count(1);
+    double out = args[0];
+    for (std::size_t i = 1; i < args.size(); ++i) {
+        if (args[i] < out) {
+            out = args[i];
+        }
+    }
+    return out;
+}
+if (name() == "max") {
+    require_min_count(1);
+    double out = args[0];
+    for (std::size_t i = 1; i < args.size(); ++i) {
+        if (args[i] > out) {
+            out = args[i];
+        }
+    }
+    return out;
+}
+if (name() == "sum") {
+    require_min_count(1);
+    double out = 0.0;
+    for (double value : args) {
+        out += value;
+    }
+    return out;
+}
+throw std::runtime_error("unknown function: " + name());
+`;
+};
+ast CallArgs : Expr(name: string, args: ArgList) {
+  override eval() -> double = `
+std::vector<double> args_values;
+const ArgList* current = &args();
+while (true) {
+    if (const auto* one = dynamic_cast<const ArgOne*>(current)) {
+        args_values.push_back(one->head().eval());
+        break;
+    }
+    if (const auto* many = dynamic_cast<const ArgMany*>(current)) {
+        args_values.push_back(many->head().eval());
+        current = &many->tail();
+        continue;
+    }
+    throw std::runtime_error("invalid ArgList node in CallArgs::eval");
+}
+const std::vector<double>& args = args_values;
+const auto require_count = [&](std::size_t expected) {
+    if (args.size() != expected) {
+        throw std::runtime_error("function '" + name() + "' expects " + std::to_string(expected) +
+                                 " argument(s), got " + std::to_string(args.size()));
+    }
+};
+const auto require_min_count = [&](std::size_t minimum) {
+    if (args.size() < minimum) {
+        throw std::runtime_error("function '" + name() + "' expects at least " + std::to_string(minimum) +
+                                 " argument(s), got " + std::to_string(args.size()));
+    }
+};
+if (name() == "sin") {
+    require_count(1);
+    return std::sin(args[0]);
+}
+if (name() == "cos") {
+    require_count(1);
+    return std::cos(args[0]);
+}
+if (name() == "tan") {
+    require_count(1);
+    return std::tan(args[0]);
+}
+if (name() == "sqrt") {
+    require_count(1);
+    return std::sqrt(args[0]);
+}
+if (name() == "abs") {
+    require_count(1);
+    return std::fabs(args[0]);
+}
+if (name() == "exp") {
+    require_count(1);
+    return std::exp(args[0]);
+}
+if (name() == "ln") {
+    require_count(1);
+    return std::log(args[0]);
+}
+if (name() == "log10") {
+    require_count(1);
+    return std::log10(args[0]);
+}
+if (name() == "pow") {
+    require_count(2);
+    return std::pow(args[0], args[1]);
+}
+if (name() == "min") {
+    require_min_count(1);
+    double out = args[0];
+    for (std::size_t i = 1; i < args.size(); ++i) {
+        if (args[i] < out) {
+            out = args[i];
+        }
+    }
+    return out;
+}
+if (name() == "max") {
+    require_min_count(1);
+    double out = args[0];
+    for (std::size_t i = 1; i < args.size(); ++i) {
+        if (args[i] > out) {
+            out = args[i];
+        }
+    }
+    return out;
+}
+if (name() == "sum") {
+    require_min_count(1);
+    double out = 0.0;
+    for (double value : args) {
+        out += value;
+    }
+    return out;
+}
+throw std::runtime_error("unknown function: " + name());
+`;
+};
+
+astbase ArgList;
+ast ArgOne : ArgList(head: Expr);
+ast ArgMany : ArgList(head: Expr, tail: ArgList);
+
+rule Expr -> Expr PLUS Term => Add($1, $3)
+          | Expr MINUS Term => Subtract($1, $3)
+          | Term => Pass($1);
+rule Term -> Term STAR Power => Multiply($1, $3)
+          | Term SLASH Power => Divide($1, $3)
+          | Power => Pass($1);
+rule Power -> Unary CARET Power => Pow($1, $3)
+           | Unary => Pass($1);
+rule Unary -> MINUS Unary => Negate($2)
+           | Primary => Pass($1);
+rule Primary -> NUMBER => Number($1.lexeme)
+             | ID => Identifier($1.lexeme)
+             | ID LPAREN ArgList RPAREN => CallArgs($1.lexeme, $3)
+             | ID LPAREN RPAREN => Call0($1.lexeme)
+             | LPAREN Expr RPAREN => Pass($2);
+rule ArgList -> Expr => ArgOne($1)
+             | Expr COMMA ArgList => ArgMany($1, $3);

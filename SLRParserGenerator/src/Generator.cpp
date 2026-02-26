@@ -13,11 +13,6 @@
 
 namespace compiler::slr {
 namespace {
-std::string SanitizeIdentifier(std::string_view text,
-                               std::string_view fallback) {
-    return compiler::common::SanitizeIdentifier(text, fallback);
-}
-
 struct SLRNormalizedGrammar {
     SLRCanonicalCollection collection;
     std::unordered_map<std::string, std::vector<std::size_t>>
@@ -707,7 +702,7 @@ SLRCanonicalCollectionToGraphvizDot(const SLRCanonicalCollection &collection,
                                     std::string_view graph_name) {
     std::ostringstream oss;
     oss << "digraph "
-        << SanitizeIdentifier(graph_name, "slr_canonical_collection") << " {\n";
+        << compiler::common::SanitizeIdentifier(graph_name, "slr_canonical_collection") << " {\n";
     oss << "  rankdir=LR;\n";
     oss << "  node [shape=box, fontname=\"monospace\"];\n";
     oss << "  __start [shape=point];\n";
@@ -753,7 +748,7 @@ SLRCanonicalCollectionToGraphvizDot(const SLRCanonicalCollection &collection,
 std::string SLRParseTableToGraphvizDot(const SLRParseTable &table,
                                        std::string_view graph_name) {
     std::ostringstream oss;
-    oss << "digraph " << SanitizeIdentifier(graph_name, "slr_parse_table")
+    oss << "digraph " << compiler::common::SanitizeIdentifier(graph_name, "slr_parse_table")
         << " {\n";
     oss << "  rankdir=LR;\n";
     oss << "  node [shape=box, fontname=\"monospace\"];\n";

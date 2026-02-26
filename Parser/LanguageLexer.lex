@@ -1,0 +1,22 @@
+lexer LanguageLexer;
+namespace compiler::lang::detail;
+token_enum LanguageTokenKind;
+
+skip WS = /[ \t\r\n]+/;
+token KW_FN = /fn/;
+token KW_LET = /let/;
+token KW_RETURN = /return/;
+token ID = /[A-Za-z_][A-Za-z0-9_]*/;
+token NUMBER = /[0-9]+/;
+token PLUS = /\+/;
+token MINUS = /-/;
+token STAR = /\*/;
+token SLASH = /\//;
+token CARET = /\^/;
+token EQUAL = /=/;
+token COMMA = /,/;
+token SEMI = /;/;
+token LPAREN = /\(/;
+token RPAREN = /\)/;
+token LBRACE = /\{/;
+token RBRACE = /\}/;

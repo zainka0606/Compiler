@@ -151,3 +151,56 @@ function(compiler_add_lr1_parser_generator_command)
             COMMENT "${ARG_COMMENT}"
     )
 endfunction()
+
+function(compiler_add_parser_generator_command)
+    set(_options)
+    set(_one_value_args SPEC_SOURCE SPEC_BUILD OUTPUT_HEADER OUTPUT_SOURCE OUTPUT_AST OUTPUT_COLLECTION OUTPUT_TABLE COMMENT)
+    set(_multi_value_args DEPENDS EXTRA_ARGS)
+    cmake_parse_arguments(ARG "${_options}" "${_one_value_args}" "${_multi_value_args}" ${ARGN})
+
+    _compiler_require_args(ARG SPEC_SOURCE SPEC_BUILD OUTPUT_HEADER OUTPUT_SOURCE OUTPUT_AST OUTPUT_COLLECTION OUTPUT_TABLE COMMENT)
+
+    _compiler_add_generator_cli_command(
+        SPEC_SOURCE "${ARG_SPEC_SOURCE}"
+        SPEC_BUILD "${ARG_SPEC_BUILD}"
+        EXECUTABLE_TARGET ParserGeneratorExe
+        OUTPUTS
+            "${ARG_OUTPUT_HEADER}"
+            "${ARG_OUTPUT_SOURCE}"
+            "${ARG_OUTPUT_AST}"
+            "${ARG_OUTPUT_COLLECTION}"
+            "${ARG_OUTPUT_TABLE}"
+        EXTRA_ARGS ${ARG_EXTRA_ARGS}
+        DEPENDS ${ARG_DEPENDS}
+        COMMENT "${ARG_COMMENT}"
+    )
+endfunction()
+
+function(compiler_add_parser_generator_stage1_command)
+    set(_options)
+    set(_one_value_args SPEC_SOURCE SPEC_BUILD OUTPUT_HEADER OUTPUT_SOURCE OUTPUT_AST OUTPUT_COLLECTION OUTPUT_TABLE COMMENT)
+    set(_multi_value_args DEPENDS EXTRA_ARGS)
+    cmake_parse_arguments(ARG "${_options}" "${_one_value_args}" "${_multi_value_args}" ${ARGN})
+
+    _compiler_require_args(ARG SPEC_SOURCE SPEC_BUILD OUTPUT_HEADER OUTPUT_SOURCE OUTPUT_AST OUTPUT_COLLECTION OUTPUT_TABLE COMMENT)
+
+    _compiler_add_generator_cli_command(
+        SPEC_SOURCE "${ARG_SPEC_SOURCE}"
+        SPEC_BUILD "${ARG_SPEC_BUILD}"
+        EXECUTABLE_TARGET ParserGeneratorStage1Exe
+        OUTPUTS
+            "${ARG_OUTPUT_HEADER}"
+            "${ARG_OUTPUT_SOURCE}"
+            "${ARG_OUTPUT_AST}"
+            "${ARG_OUTPUT_COLLECTION}"
+            "${ARG_OUTPUT_TABLE}"
+        EXTRA_ARGS ${ARG_EXTRA_ARGS}
+        DEPENDS ${ARG_DEPENDS}
+        COMMENT "${ARG_COMMENT}"
+    )
+endfunction()
+
+# Backward-compatible alias name from the interim Stage2 split.
+function(compiler_add_parser_generator_stage2_command)
+    compiler_add_parser_generator_command(${ARGN})
+endfunction()

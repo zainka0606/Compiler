@@ -1,0 +1,91 @@
+grammar MiniLang;
+start Program;
+
+token KW_FN;
+token KW_LET;
+token KW_RETURN;
+token ID;
+token NUMBER;
+token PLUS;
+token MINUS;
+token STAR;
+token SLASH;
+token CARET;
+token EQUAL;
+token COMMA;
+token SEMI;
+token LPAREN;
+token RPAREN;
+token LBRACE;
+token RBRACE;
+
+astbase Node;
+astbase Item : Node;
+astbase ItemList : Node;
+astbase FunctionDeclNode : Node;
+astbase ParamList : Node;
+astbase Statement : Node;
+astbase StatementList : Node;
+astbase Expr : Node;
+astbase ArgList : Node;
+
+ast Program : Node(items: ItemList);
+
+ast ItemListOne : ItemList(item: Item);
+ast ItemListMany : ItemList(prefix: ItemList, item: Item);
+
+ast ItemFunction : Item(function: FunctionDeclNode);
+ast ItemStatement : Item(statement: Statement);
+
+ast FunctionDeclNoParams : FunctionDeclNode(name: string, body: Block);
+ast FunctionDeclWithParams : FunctionDeclNode(name: string, params: ParamList, body: Block);
+ast ParamListOne : ParamList(name: string);
+ast ParamListMany : ParamList(prefix: ParamList, name: string);
+
+ast Block : Node(statements: StatementList);
+ast StatementListOne : StatementList(statement: Statement);
+ast StatementListMany : StatementList(prefix: StatementList, statement: Statement);
+
+ast LetStmt : Statement(name: string, expr: Expr);
+ast ReturnStmt : Statement(expr: Expr);
+ast ExprStmt : Statement(expr: Expr);
+
+ast Number : Expr(value: string);
+ast Identifier : Expr(name: string);
+ast Add : Expr(lhs: Expr, rhs: Expr);
+ast Subtract : Expr(lhs: Expr, rhs: Expr);
+ast Multiply : Expr(lhs: Expr, rhs: Expr);
+ast Divide : Expr(lhs: Expr, rhs: Expr);
+ast Pow : Expr(lhs: Expr, rhs: Expr);
+ast Negate : Expr(expr: Expr);
+ast Call0 : Expr(name: string);
+ast CallArgs : Expr(name: string, args: ArgList);
+
+ast ArgOne : ArgList(head: Expr);
+ast ArgMany : ArgList(head: Expr, tail: ArgList);
+
+rule Program -> ItemList => Program($1);
+rule ItemList -> ItemList Item => ItemListMany($1, $2) | Item => ItemListOne($1);
+rule Item -> FunctionDecl => ItemFunction($1) | Statement => ItemStatement($1);
+
+rule FunctionDecl -> KW_FN ID LPAREN ParamList RPAREN Block => FunctionDeclWithParams($2.lexeme, $4, $6)
+                   | KW_FN ID LPAREN RPAREN Block => FunctionDeclNoParams($2.lexeme, $5);
+rule ParamList -> ID => ParamListOne($1.lexeme) | ParamList COMMA ID => ParamListMany($1, $3.lexeme);
+
+rule Block -> LBRACE StatementList RBRACE => Block($2);
+rule StatementList -> StatementList Statement => StatementListMany($1, $2) | Statement => StatementListOne($1);
+rule Statement -> LetStmt => Pass($1) | ReturnStmt => Pass($1) | ExprStmt => Pass($1);
+rule LetStmt -> KW_LET ID EQUAL Expr SEMI => LetStmt($2.lexeme, $4);
+rule ReturnStmt -> KW_RETURN Expr SEMI => ReturnStmt($2);
+rule ExprStmt -> Expr SEMI => ExprStmt($1);
+
+rule Expr -> Expr PLUS Term => Add($1, $3) | Expr MINUS Term => Subtract($1, $3) | Term => Pass($1);
+rule Term -> Term STAR Power => Multiply($1, $3) | Term SLASH Power => Divide($1, $3) | Power => Pass($1);
+rule Power -> Unary CARET Power => Pow($1, $3) | Unary => Pass($1);
+rule Unary -> MINUS Unary => Negate($2) | Primary => Pass($1);
+rule Primary -> NUMBER => Number($1.lexeme)
+             | ID => Identifier($1.lexeme)
+             | ID LPAREN RPAREN => Call0($1.lexeme)
+             | ID LPAREN ArgList RPAREN => CallArgs($1.lexeme, $3)
+             | LPAREN Expr RPAREN => Pass($2);
+rule ArgList -> Expr => ArgOne($1) | Expr COMMA ArgList => ArgMany($1, $3);

@@ -12,11 +12,6 @@
 
 namespace compiler::lexgen {
 namespace {
-std::string SanitizeIdentifier(std::string_view text,
-                               std::string_view fallback) {
-    return compiler::common::SanitizeIdentifier(text, fallback);
-}
-
 struct CLIOptions {
     bool show_help = false;
     std::filesystem::path input_path;
@@ -153,11 +148,11 @@ int RunLexerGeneratorCLI(int argc, const char *const *argv) {
             for (const auto &rule : compiled.rules) {
                 std::ostringstream filename;
                 filename << std::setw(2) << std::setfill('0') << rule.rule_index
-                         << "_" << SanitizeIdentifier(rule.name, "rule")
+                         << "_" << compiler::common::SanitizeIdentifier(rule.name, "rule")
                          << ".dot";
                 WriteTextFile(nfa_dir / filename.str(),
                               NFAToGraphvizDot(
-                                  rule.nfa, "NFA_" + SanitizeIdentifier(
+                                  rule.nfa, "NFA_" + compiler::common::SanitizeIdentifier(
                                                          rule.name, "rule")));
             }
         }

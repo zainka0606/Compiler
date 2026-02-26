@@ -1,0 +1,7 @@
+fn add(a, b) {
+  let total = a + b;
+  return total;
+}
+
+let value = add(2, 3) * 4;
+value + 1;

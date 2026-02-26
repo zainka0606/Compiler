@@ -14,11 +14,6 @@
 
 namespace compiler::lr1 {
 namespace {
-std::string SanitizeIdentifier(std::string_view text,
-                               std::string_view fallback) {
-    return compiler::common::SanitizeIdentifier(text, fallback);
-}
-
 struct LR1NormalizedGrammar {
     LR1CanonicalCollection collection;
     std::unordered_map<std::string, std::vector<std::size_t>>
@@ -702,7 +697,7 @@ LR1CanonicalCollectionToGraphvizDot(const LR1CanonicalCollection &collection,
                                     std::string_view graph_name) {
     std::ostringstream oss;
     oss << "digraph "
-        << SanitizeIdentifier(graph_name, "lr1_canonical_collection") << " {\n";
+        << compiler::common::SanitizeIdentifier(graph_name, "lr1_canonical_collection") << " {\n";
     oss << "  rankdir=LR;\n";
     oss << "  node [shape=box, fontname=\"monospace\"];\n";
     oss << "  __start [shape=point];\n";
@@ -748,7 +743,7 @@ LR1CanonicalCollectionToGraphvizDot(const LR1CanonicalCollection &collection,
 std::string LR1ParseTableToGraphvizDot(const LR1ParseTable &table,
                                        std::string_view graph_name) {
     std::ostringstream oss;
-    oss << "digraph " << SanitizeIdentifier(graph_name, "lr1_parse_table")
+    oss << "digraph " << compiler::common::SanitizeIdentifier(graph_name, "lr1_parse_table")
         << " {\n";
     oss << "  rankdir=LR;\n";
     oss << "  node [shape=box, fontname=\"monospace\"];\n";

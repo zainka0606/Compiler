@@ -2,6 +2,7 @@ add_library(Common
         src/FileIO.cpp
         src/Graphviz.cpp
         src/Identifier.cpp
+        src/StringEscape.cpp
 )
 
 target_include_directories(Common

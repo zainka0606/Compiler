@@ -1,0 +1,65 @@
+grammar ParserGeneratorStage2Spec;
+start File;
+
+token KW_GRAMMAR;
+token KW_START;
+token KW_TOKEN;
+token KW_RULE;
+token KW_AST;
+token KW_ASTBASE;
+token KW_LEXEME;
+token KW_VIRTUAL;
+token KW_OVERRIDE;
+token IDENT;
+token INT;
+token ARROW;
+token FATARROW;
+token PIPE;
+token SEMI;
+token LPAREN;
+token RPAREN;
+token LBRACE;
+token RBRACE;
+token COMMA;
+token COLON;
+token DOLLAR;
+token DOT;
+token EQUAL;
+token CODE;
+
+rule File -> DeclList;
+rule DeclList -> DeclList Decl | Decl;
+rule Decl -> GrammarDecl | StartDecl | TokenDecl | AstBaseDecl | AstDecl | RuleDecl;
+
+rule GrammarDecl -> KW_GRAMMAR IDENT SEMI;
+rule StartDecl -> KW_START IDENT SEMI;
+rule TokenDecl -> KW_TOKEN IDENT SEMI;
+
+rule AstBaseDecl -> KW_ASTBASE IDENT SEMI
+                  | KW_ASTBASE IDENT COLON IDENT SEMI
+                  | KW_ASTBASE IDENT LBRACE VirtualMethodDeclList RBRACE SEMI
+                  | KW_ASTBASE IDENT COLON IDENT LBRACE VirtualMethodDeclList RBRACE SEMI;
+rule VirtualMethodDeclList -> VirtualMethodDecl | VirtualMethodDeclList VirtualMethodDecl;
+rule VirtualMethodDecl -> KW_VIRTUAL IDENT LPAREN RPAREN ARROW IDENT SEMI;
+
+rule AstDecl -> KW_AST IDENT LPAREN RPAREN SEMI
+             | KW_AST IDENT COLON IDENT LPAREN RPAREN SEMI
+             | KW_AST IDENT LPAREN FieldSpecList RPAREN SEMI
+             | KW_AST IDENT COLON IDENT LPAREN FieldSpecList RPAREN SEMI
+             | KW_AST IDENT LPAREN RPAREN LBRACE MethodImplDeclList RBRACE SEMI
+             | KW_AST IDENT COLON IDENT LPAREN RPAREN LBRACE MethodImplDeclList RBRACE SEMI
+             | KW_AST IDENT LPAREN FieldSpecList RPAREN LBRACE MethodImplDeclList RBRACE SEMI
+             | KW_AST IDENT COLON IDENT LPAREN FieldSpecList RPAREN LBRACE MethodImplDeclList RBRACE SEMI;
+rule FieldSpecList -> FieldSpec | FieldSpecList COMMA FieldSpec;
+rule FieldSpec -> IDENT | IDENT COLON IDENT;
+rule MethodImplDeclList -> MethodImplDecl | MethodImplDeclList MethodImplDecl;
+rule MethodImplDecl -> KW_OVERRIDE IDENT LPAREN RPAREN ARROW IDENT EQUAL CODE SEMI;
+
+rule RuleDecl -> KW_RULE IDENT ARROW RuleAltList SEMI;
+rule RuleAltList -> RuleAltList PIPE RuleAlt | RuleAlt;
+rule RuleAlt -> SymbolList | SymbolList FATARROW ActionExpr;
+rule SymbolList -> SymbolList IDENT | IDENT;
+
+rule ActionExpr -> IDENT LPAREN RPAREN | IDENT LPAREN ActionArgList RPAREN;
+rule ActionArgList -> ActionArgList COMMA ActionArg | ActionArg;
+rule ActionArg -> DOLLAR INT | DOLLAR INT DOT KW_LEXEME;
