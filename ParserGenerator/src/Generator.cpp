@@ -3,6 +3,7 @@
 #include "Common/Identifier.h"
 #include "Common/StringEscape.h"
 
+#include <limits>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -24,6 +25,160 @@ std::string MakeRawStringLiteral(std::string_view text) {
         delimiter = "PG2SPEC_" + std::to_string(suffix);
     }
     return "R\"" + delimiter + "(" + std::string(text) + ")" + delimiter + "\"";
+}
+
+struct InlineCppPlaceholderRef {
+    ActionArgKind kind = ActionArgKind::ChildAST;
+    std::size_t rhs_index = 0;
+    std::size_t begin = 0;
+    std::size_t end = 0;
+};
+
+bool IsAsciiDigit(char c) { return c >= '0' && c <= '9'; }
+
+std::size_t ParseOneBasedIndexLiteral(std::string_view text) {
+    std::size_t value = 0;
+    if (text.empty()) {
+        throw BuildException("missing index literal in inline cpp placeholder");
+    }
+    for (const char c : text) {
+        if (!IsAsciiDigit(c)) {
+            throw BuildException("invalid index literal '" + std::string(text) +
+                                 "' in inline cpp placeholder");
+        }
+        const std::size_t digit = static_cast<std::size_t>(c - '0');
+        if (value >
+            (std::numeric_limits<std::size_t>::max() - digit) / 10u) {
+            throw BuildException("index literal out of range in inline cpp "
+                                 "placeholder: " +
+                                 std::string(text));
+        }
+        value = value * 10u + digit;
+    }
+    if (value == 0) {
+        throw BuildException("invalid 1-based index literal in inline cpp "
+                             "placeholder: " +
+                             std::string(text));
+    }
+    return value;
+}
+
+std::vector<InlineCppPlaceholderRef>
+FindInlineCppPlaceholders(std::string_view code) {
+    enum class ScanState {
+        Normal,
+        LineComment,
+        BlockComment,
+        StringLiteral,
+        CharLiteral,
+    };
+
+    std::vector<InlineCppPlaceholderRef> out;
+    ScanState state = ScanState::Normal;
+    for (std::size_t i = 0; i < code.size(); ++i) {
+        const char c = code[i];
+        switch (state) {
+        case ScanState::Normal: {
+            if (c == '/' && i + 1 < code.size() && code[i + 1] == '/') {
+                state = ScanState::LineComment;
+                ++i;
+                continue;
+            }
+            if (c == '/' && i + 1 < code.size() && code[i + 1] == '*') {
+                state = ScanState::BlockComment;
+                ++i;
+                continue;
+            }
+            if (c == '"') {
+                state = ScanState::StringLiteral;
+                continue;
+            }
+            if (c == '\'') {
+                state = ScanState::CharLiteral;
+                continue;
+            }
+            if (c != '$' || i + 1 >= code.size() ||
+                !IsAsciiDigit(code[i + 1])) {
+                continue;
+            }
+
+            const std::size_t begin = i;
+            std::size_t cursor = i + 1;
+            while (cursor < code.size() && IsAsciiDigit(code[cursor])) {
+                ++cursor;
+            }
+            const std::size_t rhs_index =
+                ParseOneBasedIndexLiteral(code.substr(i + 1, cursor - (i + 1)));
+            ActionArgKind kind = ActionArgKind::ChildAST;
+            if (cursor + 7 <= code.size() &&
+                code.substr(cursor, 7) == ".lexeme") {
+                kind = ActionArgKind::ChildLexeme;
+                cursor += 7;
+            }
+            out.push_back(InlineCppPlaceholderRef{
+                .kind = kind,
+                .rhs_index = rhs_index,
+                .begin = begin,
+                .end = cursor,
+            });
+            i = cursor - 1;
+            continue;
+        }
+        case ScanState::LineComment:
+            if (c == '\n') {
+                state = ScanState::Normal;
+            }
+            continue;
+        case ScanState::BlockComment:
+            if (c == '*' && i + 1 < code.size() && code[i + 1] == '/') {
+                state = ScanState::Normal;
+                ++i;
+            }
+            continue;
+        case ScanState::StringLiteral:
+            if (c == '\\' && i + 1 < code.size()) {
+                ++i;
+                continue;
+            }
+            if (c == '"') {
+                state = ScanState::Normal;
+            }
+            continue;
+        case ScanState::CharLiteral:
+            if (c == '\\' && i + 1 < code.size()) {
+                ++i;
+                continue;
+            }
+            if (c == '\'') {
+                state = ScanState::Normal;
+            }
+            continue;
+        }
+    }
+    return out;
+}
+
+std::string ExpandInlineCppPlaceholders(std::string_view code) {
+    const std::vector<InlineCppPlaceholderRef> refs =
+        FindInlineCppPlaceholders(code);
+    if (refs.empty()) {
+        return std::string(code);
+    }
+
+    std::string out;
+    out.reserve(code.size() + refs.size() * 32);
+    std::size_t cursor = 0;
+    for (const InlineCppPlaceholderRef &ref : refs) {
+        out.append(code.substr(cursor, ref.begin - cursor));
+        if (ref.kind == ActionArgKind::ChildLexeme) {
+            out += "TakeLexemeChild(node, " + std::to_string(ref.rhs_index) + ")";
+        } else {
+            out += "ASTChild(node, " + std::to_string(ref.rhs_index) + ")";
+        }
+        cursor = ref.end;
+    }
+    out.append(code.substr(cursor));
+    return out;
 }
 
 bool IsBuiltinTextType(std::string_view type_name) {
@@ -379,6 +534,20 @@ void EmitTypedAstSource(std::ostringstream &cc, const Stage2SpecAST &spec,
     cc << "    return ConvertNodeAs<T>(reduction_node.Child(rhs_index - 1));\n";
     cc << "}\n\n";
 
+    cc << "struct ASTChildProxy {\n";
+    cc << "    const compiler::parsergen::CSTNode& reduction_node;\n";
+    cc << "    std::size_t rhs_index;\n\n";
+    cc << "    template <typename T>\n";
+    cc << "    operator std::unique_ptr<T>() const {\n";
+    cc << "        return TakeASTChildAs<T>(reduction_node, rhs_index);\n";
+    cc << "    }\n";
+    cc << "};\n\n";
+    cc << "ASTChildProxy ASTChild(const compiler::parsergen::CSTNode& "
+          "reduction_node,\n";
+    cc << "                       std::size_t rhs_index) {\n";
+    cc << "    return ASTChildProxy{reduction_node, rhs_index};\n";
+    cc << "}\n\n";
+
     cc << "std::unique_ptr<GeneratedNodeBase> ConvertNode(const "
           "compiler::parsergen::CSTNode& node) {\n";
     cc << "    if (node.IsTerminal()) {\n";
@@ -406,9 +575,10 @@ void EmitTypedAstSource(std::ostringstream &cc, const Stage2SpecAST &spec,
                 cc << "        return ConvertNode(node.Child("
                    << (action.pass_rhs_index - 1) << "));\n";
             } else if (action.kind == RuleActionKind::InlineCpp) {
-                cc << action.cpp_code;
-                if (!action.cpp_code.empty() &&
-                    action.cpp_code.back() != '\n') {
+                const std::string expanded_cpp =
+                    ExpandInlineCppPlaceholders(action.cpp_code);
+                cc << expanded_cpp;
+                if (!expanded_cpp.empty() && expanded_cpp.back() != '\n') {
                     cc << "\n";
                 }
             } else {
@@ -561,6 +731,33 @@ GeneratedParserFiles GenerateCppParser(const Stage2SpecAST &spec,
             cc << "constexpr const char* kUntypedAstFallbackReason = \""
                << compiler::common::EscapeForCppString(typed_reason) << "\";\n";
         }
+        cc << "const std::vector<std::pair<std::string_view, std::string_view>>& LiteralTerminalLookup() {\n";
+        cc << "    static const std::vector<std::pair<std::string_view, std::string_view>> lookup = {\n";
+        for (const LiteralTerminalDecl &literal : spec.literal_terminals) {
+            cc << "        {\""
+               << compiler::common::EscapeForCppString(literal.lexeme) << "\", \""
+               << compiler::common::EscapeForCppString(literal.terminal_name)
+               << "\"},\n";
+        }
+        cc << "    };\n";
+        cc << "    return lookup;\n";
+        cc << "}\n\n";
+        cc << "std::vector<compiler::parsergen::GenericToken>\n";
+        cc << "NormalizeTokenKindsByLiteralLexeme(const std::vector<compiler::parsergen::GenericToken>& tokens) {\n";
+        cc << "    std::vector<compiler::parsergen::GenericToken> out;\n";
+        cc << "    out.reserve(tokens.size());\n";
+        cc << "    for (const compiler::parsergen::GenericToken& token : tokens) {\n";
+        cc << "        compiler::parsergen::GenericToken normalized = token;\n";
+        cc << "        for (const auto& [literal_lexeme, literal_terminal] : LiteralTerminalLookup()) {\n";
+        cc << "            if (token.lexeme == literal_lexeme) {\n";
+        cc << "                normalized.kind = std::string(literal_terminal);\n";
+        cc << "                break;\n";
+        cc << "            }\n";
+        cc << "        }\n";
+        cc << "        out.push_back(std::move(normalized));\n";
+        cc << "    }\n";
+        cc << "    return out;\n";
+        cc << "}\n";
         cc << "} // namespace\n\n";
 
         if (emit_typed_ast) {
@@ -598,8 +795,15 @@ GeneratedParserFiles GenerateCppParser(const Stage2SpecAST &spec,
 
         cc << out.parser_class_name << "::CST " << out.parser_class_name
            << "::Parse(const std::vector<Token>& tokens) const {\n";
-        cc << "    return compiler::parsergen::ParseTokensToCST(ParseTable(), "
-              "tokens);\n";
+        if (spec.literal_terminals.empty()) {
+            cc << "    return compiler::parsergen::ParseTokensToCST(ParseTable(), "
+                  "tokens);\n";
+        } else {
+            cc << "    const std::vector<Token> normalized_tokens = "
+                  "NormalizeTokenKindsByLiteralLexeme(tokens);\n";
+            cc << "    return compiler::parsergen::ParseTokensToCST(ParseTable(), "
+                  "normalized_tokens);\n";
+        }
         cc << "}\n\n";
 
         cc << out.parser_class_name << "::AST " << out.parser_class_name

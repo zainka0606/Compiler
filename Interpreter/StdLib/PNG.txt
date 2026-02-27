@@ -1,0 +1,203 @@
+# PNG codec for 8-bit grayscale images.
+# Uses DEFLATE stored blocks via Deflate.txt helpers.
+
+fn png_append_bytes(dst, src) {
+  for (let i = 0; i < len(src); i += 1) {
+    push(dst, src[i] & 255);
+  }
+  return len(dst);
+}
+
+fn png_push_u32_be(dst, value) {
+  push(dst, (value >> 24) & 255);
+  push(dst, (value >> 16) & 255);
+  push(dst, (value >> 8) & 255);
+  push(dst, value & 255);
+  return len(dst);
+}
+
+fn png_read_u32_be(src, offset) {
+  return ((src[offset] << 24) | (src[offset + 1] << 16) |
+          (src[offset + 2] << 8) | src[offset + 3]) & 4294967295;
+}
+
+fn png_bytes_from_text(text) {
+  let out = [];
+  for (let i = 0; i < len(text); i += 1) {
+    push(out, text[i] & 255);
+  }
+  return out;
+}
+
+fn png_crc32(bytes) {
+  let crc = 4294967295;
+  for (let i = 0; i < len(bytes); i += 1) {
+    crc = crc ^ (bytes[i] & 255);
+    for (let bit = 0; bit < 8; bit += 1) {
+      if ((crc & 1) != 0) {
+        crc = (crc >> 1) ^ 3988292384;
+      } else {
+        crc = crc >> 1;
+      }
+      crc = crc & 4294967295;
+    }
+  }
+  return (crc ^ 4294967295) & 4294967295;
+}
+
+fn png_make_chunk(type_text, data) {
+  let type_bytes = png_bytes_from_text(type_text);
+
+  let crc_input = [];
+  png_append_bytes(crc_input, type_bytes);
+  png_append_bytes(crc_input, data);
+
+  let out = [];
+  png_push_u32_be(out, len(data));
+  png_append_bytes(out, type_bytes);
+  png_append_bytes(out, data);
+  png_push_u32_be(out, png_crc32(crc_input));
+  return out;
+}
+
+fn png_signature_ok(data) {
+  let sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (len(data) < len(sig)) {
+    return false;
+  }
+  for (let i = 0; i < len(sig); i += 1) {
+    if ((data[i] & 255) != sig[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+fn png_encode_grayscale(width, height, pixels) {
+  let raw = [];
+  for (let y = 0; y < height; y += 1) {
+    push(raw, 0);
+    for (let x = 0; x < width; x += 1) {
+      let idx = y * width + x;
+      let value = clamp(pixels[idx] // 1, 0, 255);
+      push(raw, value);
+    }
+  }
+
+  let idat_payload = deflate_zlib_compress_stored(raw);
+
+  let ihdr = [];
+  png_push_u32_be(ihdr, width);
+  png_push_u32_be(ihdr, height);
+  push(ihdr, 8); # bit depth
+  push(ihdr, 0); # color type: grayscale
+  push(ihdr, 0); # compression method
+  push(ihdr, 0); # filter method
+  push(ihdr, 0); # interlace method
+
+  let png = [137, 80, 78, 71, 13, 10, 26, 10];
+  png_append_bytes(png, png_make_chunk("IHDR", ihdr));
+  png_append_bytes(png, png_make_chunk("IDAT", idat_payload));
+  png_append_bytes(png, png_make_chunk("IEND", []));
+  return png;
+}
+
+fn png_decode_grayscale(png_bytes) {
+  if (!png_signature_ok(png_bytes)) {
+    return [0, 0, []];
+  }
+
+  let pos = 8;
+  let width = 0;
+  let height = 0;
+  let saw_ihdr = false;
+  let idat_payload = [];
+
+  while (pos + 8 <= len(png_bytes)) {
+    let chunk_len = png_read_u32_be(png_bytes, pos);
+    pos += 4;
+
+    if (pos + 4 + chunk_len + 4 > len(png_bytes)) {
+      return [0, 0, []];
+    }
+
+    let t0 = png_bytes[pos] & 255;
+    let t1 = png_bytes[pos + 1] & 255;
+    let t2 = png_bytes[pos + 2] & 255;
+    let t3 = png_bytes[pos + 3] & 255;
+    pos += 4;
+
+    let chunk_data = [];
+    for (let i = 0; i < chunk_len; i += 1) {
+      push(chunk_data, png_bytes[pos + i] & 255);
+    }
+    pos += chunk_len;
+
+    let expected_crc = png_read_u32_be(png_bytes, pos);
+    pos += 4;
+
+    let crc_input = [t0, t1, t2, t3];
+    png_append_bytes(crc_input, chunk_data);
+    if (png_crc32(crc_input) != expected_crc) {
+      return [0, 0, []];
+    }
+
+    if (t0 == 73 && t1 == 72 && t2 == 68 && t3 == 82) {
+      if (chunk_len != 13) {
+        return [0, 0, []];
+      }
+      width = png_read_u32_be(chunk_data, 0);
+      height = png_read_u32_be(chunk_data, 4);
+      let bit_depth = chunk_data[8] & 255;
+      let color_type = chunk_data[9] & 255;
+      let compression_method = chunk_data[10] & 255;
+      let filter_method = chunk_data[11] & 255;
+      let interlace_method = chunk_data[12] & 255;
+      if (bit_depth != 8 || color_type != 0 || compression_method != 0 ||
+          filter_method != 0 || interlace_method != 0) {
+        return [0, 0, []];
+      }
+      saw_ihdr = true;
+    } else {
+      if (t0 == 73 && t1 == 68 && t2 == 65 && t3 == 84) {
+        png_append_bytes(idat_payload, chunk_data);
+      } else {
+        if (t0 == 73 && t1 == 69 && t2 == 78 && t3 == 68) {
+          break;
+        }
+      }
+    }
+  }
+
+  if (!saw_ihdr || width <= 0 || height <= 0) {
+    return [0, 0, []];
+  }
+
+  let raw = deflate_zlib_decompress_stored(idat_payload);
+  let stride = width + 1;
+  if (len(raw) != height * stride) {
+    return [0, 0, []];
+  }
+
+  let pixels = [];
+  for (let y = 0; y < height; y += 1) {
+    let row_base = y * stride;
+    let filter_type = raw[row_base] & 255;
+    if (filter_type != 0) {
+      return [0, 0, []];
+    }
+    for (let x = 0; x < width; x += 1) {
+      push(pixels, raw[row_base + 1 + x] & 255);
+    }
+  }
+
+  return [width, height, pixels];
+}
+
+fn png_write_grayscale(path, width, height, pixels) {
+  return write_binary_file(path, png_encode_grayscale(width, height, pixels));
+}
+
+fn png_read_grayscale(path) {
+  return png_decode_grayscale(read_binary_file(path));
+}

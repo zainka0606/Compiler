@@ -1,0 +1,118 @@
+digraph program_cfg {
+  rankdir=TB;
+  node [shape=box];
+  subgraph cluster_0 {
+    label="top-level";
+    color=gray60;
+    g0_n0 [label="entry", shape=oval];
+    g0_n1 [label="exit", shape=oval];
+    g0_n2 [label="call(render_mandelbrot_png)"];
+    g0_n0 -> g0_n2;
+    g0_n2 -> g0_n1;
+  }
+  subgraph cluster_1 {
+    label="fn complex_mandelbrot_escape";
+    color=gray60;
+    g1_n0 [label="entry", shape=oval];
+    g1_n1 [label="exit", shape=oval];
+    g1_n2 [label="let z"];
+    g1_n3 [label="let iter"];
+    g1_n4 [label="while land"];
+    g1_n5 [label="while_end"];
+    g1_n6 [label="while_body"];
+    g1_n7 [label="assign id(z) = add"];
+    g1_n8 [label="assign id(iter) += num(1)"];
+    g1_n9 [label="return"];
+    g1_n0 -> g1_n2;
+    g1_n2 -> g1_n3;
+    g1_n3 -> g1_n4;
+    g1_n4 -> g1_n6 [label="T"];
+    g1_n6 -> g1_n7;
+    g1_n7 -> g1_n8;
+    g1_n8 -> g1_n4 [label="loop"];
+    g1_n4 -> g1_n5 [label="F"];
+    g1_n5 -> g1_n9;
+    g1_n9 -> g1_n1 [label="return"];
+  }
+  subgraph cluster_2 {
+    label="fn mandelbrot_pixel";
+    color=gray60;
+    g2_n0 [label="entry", shape=oval];
+    g2_n1 [label="exit", shape=oval];
+    g2_n2 [label="let u"];
+    g2_n3 [label="let v"];
+    g2_n4 [label="let x_min"];
+    g2_n5 [label="let x_max"];
+    g2_n6 [label="let x_span"];
+    g2_n7 [label="let aspect"];
+    g2_n8 [label="let y_span"];
+    g2_n9 [label="let real"];
+    g2_n10 [label="let imag"];
+    g2_n11 [label="let c"];
+    g2_n12 [label="let iter"];
+    g2_n13 [label="if gte"];
+    g2_n14 [label="then"];
+    g2_n15 [label="return"];
+    g2_n16 [label="else"];
+    g2_n17 [label="let t"];
+    g2_n18 [label="return"];
+    g2_n0 -> g2_n2;
+    g2_n2 -> g2_n3;
+    g2_n3 -> g2_n4;
+    g2_n4 -> g2_n5;
+    g2_n5 -> g2_n6;
+    g2_n6 -> g2_n7;
+    g2_n7 -> g2_n8;
+    g2_n8 -> g2_n9;
+    g2_n9 -> g2_n10;
+    g2_n10 -> g2_n11;
+    g2_n11 -> g2_n12;
+    g2_n12 -> g2_n13;
+    g2_n13 -> g2_n14 [label="T"];
+    g2_n14 -> g2_n15;
+    g2_n15 -> g2_n1 [label="return"];
+    g2_n13 -> g2_n16 [label="F"];
+    g2_n16 -> g2_n17;
+    g2_n17 -> g2_n18;
+    g2_n18 -> g2_n1 [label="return"];
+  }
+  subgraph cluster_3 {
+    label="fn render_mandelbrot_png";
+    color=gray60;
+    g3_n0 [label="entry", shape=oval];
+    g3_n1 [label="exit", shape=oval];
+    g3_n2 [label="let pixels"];
+    g3_n3 [label="for lt"];
+    g3_n4 [label="for_init let y = num(0)"];
+    g3_n5 [label="for_cond lt"];
+    g3_n6 [label="for_end"];
+    g3_n7 [label="for_body"];
+    g3_n8 [label="for lt"];
+    g3_n9 [label="for_init let x = num(0)"];
+    g3_n10 [label="for_cond lt"];
+    g3_n11 [label="for_end"];
+    g3_n12 [label="for_body"];
+    g3_n13 [label="call(push)"];
+    g3_n14 [label="for_update assign id(x) += num(1)"];
+    g3_n15 [label="for_update assign id(y) += num(1)"];
+    g3_n16 [label="return"];
+    g3_n0 -> g3_n2;
+    g3_n2 -> g3_n3;
+    g3_n3 -> g3_n4;
+    g3_n4 -> g3_n5;
+    g3_n5 -> g3_n7 [label="T"];
+    g3_n7 -> g3_n8;
+    g3_n8 -> g3_n9;
+    g3_n9 -> g3_n10;
+    g3_n10 -> g3_n12 [label="T"];
+    g3_n12 -> g3_n13;
+    g3_n13 -> g3_n14;
+    g3_n14 -> g3_n10 [label="loop"];
+    g3_n10 -> g3_n11 [label="F"];
+    g3_n11 -> g3_n15;
+    g3_n15 -> g3_n5 [label="loop"];
+    g3_n5 -> g3_n6 [label="F"];
+    g3_n6 -> g3_n16;
+    g3_n16 -> g3_n1 [label="return"];
+  }
+}

@@ -99,10 +99,17 @@ struct RuleDefinition {
     std::vector<RuleAlternative> alternatives;
 };
 
+struct LiteralTerminalDecl {
+    std::string lexeme;
+    std::string terminal_name;
+    bool is_explicit = false;
+};
+
 struct Stage2SpecAST {
     std::string grammar_name;
     std::string start_symbol;
     std::vector<std::string> terminals;
+    std::vector<LiteralTerminalDecl> literal_terminals;
     std::vector<ASTNodeTypeDecl> ast_node_types;
     std::vector<RuleDefinition> rules;
 };

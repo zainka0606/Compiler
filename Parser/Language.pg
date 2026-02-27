@@ -1,23 +1,8 @@
 grammar MiniLang;
 start Program;
 
-token KW_FN;
-token KW_LET;
-token KW_RETURN;
 token ID;
 token NUMBER;
-token PLUS;
-token MINUS;
-token STAR;
-token SLASH;
-token CARET;
-token EQUAL;
-token COMMA;
-token SEMI;
-token LPAREN;
-token RPAREN;
-token LBRACE;
-token RBRACE;
 
 astbase Node;
 astbase Item : Node;
@@ -68,24 +53,24 @@ rule Program -> ItemList => Program($1);
 rule ItemList -> ItemList Item => ItemListMany($1, $2) | Item => ItemListOne($1);
 rule Item -> FunctionDecl => ItemFunction($1) | Statement => ItemStatement($1);
 
-rule FunctionDecl -> KW_FN ID LPAREN ParamList RPAREN Block => FunctionDeclWithParams($2.lexeme, $4, $6)
-                   | KW_FN ID LPAREN RPAREN Block => FunctionDeclNoParams($2.lexeme, $5);
-rule ParamList -> ID => ParamListOne($1.lexeme) | ParamList COMMA ID => ParamListMany($1, $3.lexeme);
+rule FunctionDecl -> "fn" ID '(' ParamList ')' Block => FunctionDeclWithParams($2.lexeme, $4, $6)
+                   | "fn" ID '(' ')' Block => FunctionDeclNoParams($2.lexeme, $5);
+rule ParamList -> ID => ParamListOne($1.lexeme) | ParamList ',' ID => ParamListMany($1, $3.lexeme);
 
-rule Block -> LBRACE StatementList RBRACE => Block($2);
+rule Block -> '{' StatementList '}' => Block($2);
 rule StatementList -> StatementList Statement => StatementListMany($1, $2) | Statement => StatementListOne($1);
 rule Statement -> LetStmt => Pass($1) | ReturnStmt => Pass($1) | ExprStmt => Pass($1);
-rule LetStmt -> KW_LET ID EQUAL Expr SEMI => LetStmt($2.lexeme, $4);
-rule ReturnStmt -> KW_RETURN Expr SEMI => ReturnStmt($2);
-rule ExprStmt -> Expr SEMI => ExprStmt($1);
+rule LetStmt -> "let" ID '=' Expr ';' => LetStmt($2.lexeme, $4);
+rule ReturnStmt -> "return" Expr ';' => ReturnStmt($2);
+rule ExprStmt -> Expr ';' => ExprStmt($1);
 
-rule Expr -> Expr PLUS Term => Add($1, $3) | Expr MINUS Term => Subtract($1, $3) | Term => Pass($1);
-rule Term -> Term STAR Power => Multiply($1, $3) | Term SLASH Power => Divide($1, $3) | Power => Pass($1);
-rule Power -> Unary CARET Power => Pow($1, $3) | Unary => Pass($1);
-rule Unary -> MINUS Unary => Negate($2) | Primary => Pass($1);
+rule Expr -> Expr '+' Term => Add($1, $3) | Expr '-' Term => Subtract($1, $3) | Term => Pass($1);
+rule Term -> Term '*' Power => Multiply($1, $3) | Term '/' Power => Divide($1, $3) | Power => Pass($1);
+rule Power -> Unary '^' Power => Pow($1, $3) | Unary => Pass($1);
+rule Unary -> '-' Unary => Negate($2) | Primary => Pass($1);
 rule Primary -> NUMBER => Number($1.lexeme)
              | ID => Identifier($1.lexeme)
-             | ID LPAREN RPAREN => Call0($1.lexeme)
-             | ID LPAREN ArgList RPAREN => CallArgs($1.lexeme, $3)
-             | LPAREN Expr RPAREN => Pass($2);
-rule ArgList -> Expr => ArgOne($1) | Expr COMMA ArgList => ArgMany($1, $3);
+             | ID '(' ')' => Call0($1.lexeme)
+             | ID '(' ArgList ')' => CallArgs($1.lexeme, $3)
+             | '(' Expr ')' => Pass($2);
+rule ArgList -> Expr => ArgOne($1) | Expr ',' ArgList => ArgMany($1, $3);

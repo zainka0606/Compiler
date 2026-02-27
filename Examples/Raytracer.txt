@@ -1,0 +1,131 @@
+# Grayscale raytracer example.
+# Writes Examples/Raytracer.png.
+
+class Vec3 {
+  x;
+  y;
+  z;
+
+  fn __add__(other) {
+    return Vec3(self.x + other.x, self.y + other.y, self.z + other.z);
+  }
+
+  fn __sub__(other) {
+    return Vec3(self.x - other.x, self.y - other.y, self.z - other.z);
+  }
+
+  fn __mul__(scale) {
+    return Vec3(self.x * scale, self.y * scale, self.z * scale);
+  }
+
+  fn __rmul__(scale) {
+    return self * scale;
+  }
+
+  fn __div__(scale) {
+    return Vec3(self.x / scale, self.y / scale, self.z / scale);
+  }
+
+  fn dot(other) {
+    return self.x * other.x + self.y * other.y + self.z * other.z;
+  }
+
+  fn length2() {
+    return self.dot(self);
+  }
+
+  fn length() {
+    return sqrt(self.length2());
+  }
+
+  fn normalized() {
+    let len = self.length();
+    return len == 0 ? Vec3(0, 0, 0) : self / len;
+  }
+}
+
+class Ray {
+  origin;
+  dir;
+
+  fn at(t) {
+    return self.origin + self.dir * t;
+  }
+}
+
+class Sphere {
+  center;
+  radius;
+
+  fn hit(ray) {
+    let oc = ray.origin - self.center;
+    let a = ray.dir.dot(ray.dir);
+    let half_b = oc.dot(ray.dir);
+    let c = oc.dot(oc) - self.radius * self.radius;
+    let discriminant = half_b * half_b - a * c;
+
+    if (discriminant < 0) {
+      return -1;
+    }
+
+    let root = sqrt(discriminant);
+    let t = (-half_b - root) / a;
+    if (t > 0.001) {
+      return t;
+    }
+
+    t = (-half_b + root) / a;
+    return t > 0.001 ? t : -1;
+  }
+}
+
+fn shade_background(dir) {
+  let t = 0.5 * (dir.y + 1);
+  return 0.2 + 0.5 * t;
+}
+
+fn trace(ray, sphere, light_dir) {
+  let t = sphere.hit(ray);
+  if (t < 0) {
+    return shade_background(ray.dir);
+  }
+
+  let p = ray.at(t);
+  let normal = (p - sphere.center).normalized();
+  let diffuse = clamp(normal.dot(light_dir), 0, 1);
+  return clamp(0.15 + 0.85 * diffuse, 0, 1);
+}
+
+fn to_byte(value01) {
+  return clamp((255 * value01) // 1, 0, 255);
+}
+
+fn render(width, height, output_path) {
+  let camera_origin = Vec3(0, 0, 0);
+  let sphere = Sphere(Vec3(0, 0, -3.2), 1.0);
+  let light_dir = Vec3(-0.8, 1.2, 1.0).normalized();
+
+  let aspect = width / height;
+  let vfov_degrees = 55;
+  let half_height = tan(radians(vfov_degrees) / 2);
+  let half_width = half_height * aspect;
+
+  let pixels = [];
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let u = (x + 0.5) / width;
+      let v = (y + 0.5) / height;
+
+      let screen_x = (2 * u - 1) * half_width;
+      let screen_y = (1 - 2 * v) * half_height;
+
+      let dir = Vec3(screen_x, screen_y, -1).normalized();
+      let ray = Ray(camera_origin, dir);
+      push(pixels, to_byte(trace(ray, sphere, light_dir)));
+    }
+  }
+
+  return png_write_grayscale(output_path, width, height, pixels);
+}
+
+render(640, 360, "Examples/Raytracer.png");

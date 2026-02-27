@@ -6,6 +6,7 @@
 #include "Stage2SpecParser.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdlib>
 #include <limits>
 #include <sstream>
@@ -82,6 +83,10 @@ const char *TerminalNameForToken(SpecTokenKind kind) {
         return "EQUAL";
     case SpecTokenKind::CODE:
         return "CODE";
+    case SpecTokenKind::STRING:
+        return "STRING";
+    case SpecTokenKind::CHAR:
+        return "CHAR";
     case SpecTokenKind::EndOfFile:
         return "$";
     }
@@ -306,21 +311,338 @@ void FinalizeAstDeclFields(
     }
 }
 
+std::string DecodeEscapedText(std::string_view text,
+                              std::string_view context) {
+    std::string out;
+    out.reserve(text.size());
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        const char c = text[i];
+        if (c != '\\') {
+            out.push_back(c);
+            continue;
+        }
+        if (i + 1 >= text.size()) {
+            throw BuildException("dangling escape in " + std::string(context));
+        }
+        const char next = text[++i];
+        switch (next) {
+        case 'n':
+            out.push_back('\n');
+            break;
+        case 't':
+            out.push_back('\t');
+            break;
+        case 'r':
+            out.push_back('\r');
+            break;
+        case '0':
+            out.push_back('\0');
+            break;
+        case '\\':
+            out.push_back('\\');
+            break;
+        case '"':
+            out.push_back('"');
+            break;
+        case '\'':
+            out.push_back('\'');
+            break;
+        default:
+            out.push_back(next);
+            break;
+        }
+    }
+    return out;
+}
+
+std::string ParseQuotedLiteral(std::string_view lexeme, char quote,
+                               std::string_view context) {
+    if (lexeme.size() < 2 || lexeme.front() != quote || lexeme.back() != quote) {
+        throw BuildException("invalid " + std::string(context) + ": " +
+                             std::string(lexeme));
+    }
+    return DecodeEscapedText(lexeme.substr(1, lexeme.size() - 2), context);
+}
+
+struct InlineCppPlaceholderRef {
+    ActionArgKind kind = ActionArgKind::ChildAST;
+    std::size_t rhs_index = 0;
+    std::size_t begin = 0;
+    std::size_t end = 0;
+};
+
+bool IsAsciiDigit(char c) { return c >= '0' && c <= '9'; }
+
+std::size_t ParseOneBasedIndexLiteral(std::string_view text,
+                                      std::string_view context) {
+    std::size_t value = 0;
+    if (text.empty()) {
+        throw BuildException("missing index literal in " + std::string(context));
+    }
+    for (const char c : text) {
+        if (!IsAsciiDigit(c)) {
+            throw BuildException("invalid index literal '" + std::string(text) +
+                                 "' in " + std::string(context));
+        }
+        const std::size_t digit = static_cast<std::size_t>(c - '0');
+        if (value >
+            (std::numeric_limits<std::size_t>::max() - digit) / 10u) {
+            throw BuildException("index literal out of range in " +
+                                 std::string(context) + ": " +
+                                 std::string(text));
+        }
+        value = value * 10u + digit;
+    }
+    if (value == 0) {
+        throw BuildException("invalid 1-based index literal in " +
+                             std::string(context) + ": " + std::string(text));
+    }
+    return value;
+}
+
+std::vector<InlineCppPlaceholderRef>
+FindInlineCppPlaceholders(std::string_view code) {
+    enum class ScanState {
+        Normal,
+        LineComment,
+        BlockComment,
+        StringLiteral,
+        CharLiteral,
+    };
+
+    std::vector<InlineCppPlaceholderRef> out;
+    ScanState state = ScanState::Normal;
+    for (std::size_t i = 0; i < code.size(); ++i) {
+        const char c = code[i];
+        switch (state) {
+        case ScanState::Normal: {
+            if (c == '/' && i + 1 < code.size() && code[i + 1] == '/') {
+                state = ScanState::LineComment;
+                ++i;
+                continue;
+            }
+            if (c == '/' && i + 1 < code.size() && code[i + 1] == '*') {
+                state = ScanState::BlockComment;
+                ++i;
+                continue;
+            }
+            if (c == '"') {
+                state = ScanState::StringLiteral;
+                continue;
+            }
+            if (c == '\'') {
+                state = ScanState::CharLiteral;
+                continue;
+            }
+            if (c != '$' || i + 1 >= code.size() ||
+                !IsAsciiDigit(code[i + 1])) {
+                continue;
+            }
+
+            const std::size_t begin = i;
+            std::size_t cursor = i + 1;
+            while (cursor < code.size() && IsAsciiDigit(code[cursor])) {
+                ++cursor;
+            }
+            const std::size_t rhs_index = ParseOneBasedIndexLiteral(
+                code.substr(i + 1, cursor - (i + 1)), "inline cpp placeholder");
+            ActionArgKind kind = ActionArgKind::ChildAST;
+            if (cursor + 7 <= code.size() &&
+                code.substr(cursor, 7) == ".lexeme") {
+                kind = ActionArgKind::ChildLexeme;
+                cursor += 7;
+            }
+            out.push_back(InlineCppPlaceholderRef{
+                .kind = kind,
+                .rhs_index = rhs_index,
+                .begin = begin,
+                .end = cursor,
+            });
+            i = cursor - 1;
+            continue;
+        }
+        case ScanState::LineComment:
+            if (c == '\n') {
+                state = ScanState::Normal;
+            }
+            continue;
+        case ScanState::BlockComment:
+            if (c == '*' && i + 1 < code.size() && code[i + 1] == '/') {
+                state = ScanState::Normal;
+                ++i;
+            }
+            continue;
+        case ScanState::StringLiteral:
+            if (c == '\\' && i + 1 < code.size()) {
+                ++i;
+                continue;
+            }
+            if (c == '"') {
+                state = ScanState::Normal;
+            }
+            continue;
+        case ScanState::CharLiteral:
+            if (c == '\\' && i + 1 < code.size()) {
+                ++i;
+                continue;
+            }
+            if (c == '\'') {
+                state = ScanState::Normal;
+            }
+            continue;
+        }
+    }
+    return out;
+}
+
+std::uint64_t FNV1a64(std::string_view text) {
+    std::uint64_t hash = 14695981039346656037ull;
+    for (const unsigned char c : text) {
+        hash ^= c;
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
+
+std::string Hex64(std::uint64_t value) {
+    constexpr char kDigits[] = "0123456789ABCDEF";
+    std::string out(16, '0');
+    for (int i = 15; i >= 0; --i) {
+        out[static_cast<std::size_t>(i)] = kDigits[value & 0xFu];
+        value >>= 4u;
+    }
+    return out;
+}
+
+std::string MakeLiteralTerminalName(std::string_view literal_lexeme) {
+    return "__LIT_" + Hex64(FNV1a64(literal_lexeme));
+}
+
+void ReplaceTerminalSymbolInRules(Stage2SpecAST &spec, std::string_view from,
+                                  std::string_view to) {
+    if (from == to) {
+        return;
+    }
+    for (RuleDefinition &rule : spec.rules) {
+        for (RuleAlternative &alt : rule.alternatives) {
+            for (std::string &symbol : alt.symbols) {
+                if (symbol == from) {
+                    symbol = std::string(to);
+                }
+            }
+        }
+    }
+}
+
+void BindLiteralToExplicitTerminal(Stage2SpecAST &spec,
+                                   std::string terminal_name,
+                                   std::string lexeme) {
+    for (LiteralTerminalDecl &decl : spec.literal_terminals) {
+        if (decl.lexeme != lexeme) {
+            continue;
+        }
+        if (decl.is_explicit && decl.terminal_name != terminal_name) {
+            throw BuildException("literal '" + lexeme +
+                                 "' is already bound to token '" +
+                                 decl.terminal_name + "'");
+        }
+        if (!decl.is_explicit && decl.terminal_name != terminal_name) {
+            ReplaceTerminalSymbolInRules(spec, decl.terminal_name, terminal_name);
+            decl.terminal_name = std::move(terminal_name);
+        }
+        decl.is_explicit = true;
+        return;
+    }
+
+    spec.literal_terminals.push_back(LiteralTerminalDecl{
+        .lexeme = std::move(lexeme),
+        .terminal_name = std::move(terminal_name),
+        .is_explicit = true,
+    });
+}
+
+std::string InternLiteralTerminal(Stage2SpecAST &spec, std::string lexeme) {
+    for (const LiteralTerminalDecl &decl : spec.literal_terminals) {
+        if (decl.lexeme == lexeme) {
+            return decl.terminal_name;
+        }
+    }
+
+    const std::string base_name = MakeLiteralTerminalName(lexeme);
+    std::string terminal_name = base_name;
+    std::size_t suffix = 0;
+    auto name_is_used = [&](std::string_view candidate) {
+        for (const std::string &terminal : spec.terminals) {
+            if (terminal == candidate) {
+                return true;
+            }
+        }
+        for (const LiteralTerminalDecl &decl : spec.literal_terminals) {
+            if (decl.terminal_name == candidate) {
+                return true;
+            }
+        }
+        return false;
+    };
+    while (name_is_used(terminal_name)) {
+        ++suffix;
+        terminal_name = base_name + "_" + std::to_string(suffix);
+    }
+
+    spec.literal_terminals.push_back(
+        LiteralTerminalDecl{.lexeme = std::move(lexeme),
+                            .terminal_name = terminal_name,
+                            .is_explicit = false});
+    return terminal_name;
+}
+
+std::string ParseRuleSymbol(const CSTNode &node,
+                            const LR1ParseTable &parse_table,
+                            Stage2SpecAST &spec) {
+    if (node.Symbol() != "Symbol") {
+        throw BuildException("expected Symbol node, got '" +
+                             std::string(node.Symbol()) + "'");
+    }
+
+    if (MatchesReduction(parse_table, node, "Symbol", {"IDENT"})) {
+        return ExpectTerminalLexeme(node.Child(0));
+    }
+    if (MatchesReduction(parse_table, node, "Symbol", {"STRING"})) {
+        const std::string literal =
+            ParseQuotedLiteral(ExpectTerminalLexeme(node.Child(0)), '"',
+                               "rule symbol string literal");
+        return InternLiteralTerminal(spec, literal);
+    }
+    if (MatchesReduction(parse_table, node, "Symbol", {"CHAR"})) {
+        const std::string literal =
+            ParseQuotedLiteral(ExpectTerminalLexeme(node.Child(0)), '\'',
+                               "rule symbol character literal");
+        if (literal.size() != 1) {
+            throw BuildException(
+                "character literal in rule symbol must decode to one character");
+        }
+        return InternLiteralTerminal(spec, literal);
+    }
+
+    throw BuildException("unsupported Symbol CST shape");
+}
+
 std::vector<std::string> ParseSymbolList(const CSTNode &node,
-                                         const LR1ParseTable &parse_table) {
+                                         const LR1ParseTable &parse_table,
+                                         Stage2SpecAST &spec) {
     if (node.Symbol() != "SymbolList") {
         throw BuildException("expected SymbolList node, got '" +
                              std::string(node.Symbol()) + "'");
     }
 
-    if (MatchesReduction(parse_table, node, "SymbolList", {"IDENT"})) {
-        return {ExpectTerminalLexeme(node.Child(0))};
+    if (MatchesReduction(parse_table, node, "SymbolList", {"Symbol"})) {
+        return {ParseRuleSymbol(node.Child(0), parse_table, spec)};
     }
     if (MatchesReduction(parse_table, node, "SymbolList",
-                         {"SymbolList", "IDENT"})) {
+                         {"SymbolList", "Symbol"})) {
         std::vector<std::string> out =
-            ParseSymbolList(node.Child(0), parse_table);
-        out.push_back(ExpectTerminalLexeme(node.Child(1)));
+            ParseSymbolList(node.Child(0), parse_table, spec);
+        out.push_back(ParseRuleSymbol(node.Child(1), parse_table, spec));
         return out;
     }
 
@@ -422,17 +744,18 @@ RuleAction ParseActionExpr(const CSTNode &node,
 }
 
 RuleAlternative ParseRuleAlt(const CSTNode &node,
-                             const LR1ParseTable &parse_table) {
+                             const LR1ParseTable &parse_table,
+                             Stage2SpecAST &spec) {
     if (MatchesReduction(parse_table, node, "RuleAlt", {"SymbolList"})) {
         return RuleAlternative{
-            .symbols = ParseSymbolList(node.Child(0), parse_table),
+            .symbols = ParseSymbolList(node.Child(0), parse_table, spec),
             .action = RuleAction{},
         };
     }
     if (MatchesReduction(parse_table, node, "RuleAlt",
                          {"SymbolList", "FATARROW", "ActionExpr"})) {
         return RuleAlternative{
-            .symbols = ParseSymbolList(node.Child(0), parse_table),
+            .symbols = ParseSymbolList(node.Child(0), parse_table, spec),
             .action = ParseActionExpr(node.Child(2), parse_table),
         };
     }
@@ -441,6 +764,7 @@ RuleAlternative ParseRuleAlt(const CSTNode &node,
 }
 
 void AppendRuleAltList(const CSTNode &node, const LR1ParseTable &parse_table,
+                       Stage2SpecAST &spec,
                        std::vector<RuleAlternative> &out) {
     if (node.Symbol() != "RuleAltList") {
         throw BuildException("expected RuleAltList node, got '" +
@@ -448,13 +772,13 @@ void AppendRuleAltList(const CSTNode &node, const LR1ParseTable &parse_table,
     }
 
     if (MatchesReduction(parse_table, node, "RuleAltList", {"RuleAlt"})) {
-        out.push_back(ParseRuleAlt(node.Child(0), parse_table));
+        out.push_back(ParseRuleAlt(node.Child(0), parse_table, spec));
         return;
     }
     if (MatchesReduction(parse_table, node, "RuleAltList",
                          {"RuleAltList", "PIPE", "RuleAlt"})) {
-        AppendRuleAltList(node.Child(0), parse_table, out);
-        out.push_back(ParseRuleAlt(node.Child(2), parse_table));
+        AppendRuleAltList(node.Child(0), parse_table, spec, out);
+        out.push_back(ParseRuleAlt(node.Child(2), parse_table, spec));
         return;
     }
 
@@ -484,6 +808,28 @@ void AppendDeclList(const CSTNode &node, const LR1ParseTable &parse_table,
     throw BuildException("unsupported DeclList CST shape");
 }
 
+std::string ParseTokenDeclLiteral(const CSTNode &token_decl_node,
+                                  const LR1ParseTable &parse_table) {
+    if (MatchesReduction(parse_table, token_decl_node, "TokenDecl",
+                         {"KW_TOKEN", "IDENT", "EQUAL", "STRING", "SEMI"})) {
+        return ParseQuotedLiteral(ExpectTerminalLexeme(token_decl_node.Child(3)),
+                                  '"', "token string literal");
+    }
+    if (MatchesReduction(parse_table, token_decl_node, "TokenDecl",
+                         {"KW_TOKEN", "IDENT", "EQUAL", "CHAR", "SEMI"})) {
+        const std::string literal = ParseQuotedLiteral(
+            ExpectTerminalLexeme(token_decl_node.Child(3)), '\'',
+            "token character literal");
+        if (literal.size() != 1) {
+            throw BuildException(
+                "character literal in token declaration must decode to one "
+                "character");
+        }
+        return literal;
+    }
+    throw BuildException("unsupported TokenDecl literal form");
+}
+
 void ParseDecl(const CSTNode &node, const LR1ParseTable &parse_table,
                Stage2SpecAST &spec) {
     if (node.Symbol() != "Decl") {
@@ -509,7 +855,13 @@ void ParseDecl(const CSTNode &node, const LR1ParseTable &parse_table,
     }
     if (MatchesReduction(parse_table, node, "Decl", {"TokenDecl"})) {
         const CSTNode &t = node.Child(0);
-        spec.terminals.push_back(ExpectTerminalLexeme(t.Child(1)));
+        const std::string terminal_name = ExpectTerminalLexeme(t.Child(1));
+        spec.terminals.push_back(terminal_name);
+        if (!MatchesReduction(parse_table, t, "TokenDecl",
+                              {"KW_TOKEN", "IDENT", "SEMI"})) {
+            BindLiteralToExplicitTerminal(
+                spec, terminal_name, ParseTokenDeclLiteral(t, parse_table));
+        }
         return;
     }
     if (MatchesReduction(parse_table, node, "Decl", {"AstBaseDecl"})) {
@@ -617,12 +969,40 @@ void ParseDecl(const CSTNode &node, const LR1ParseTable &parse_table,
         const CSTNode &r = node.Child(0);
         RuleDefinition rule;
         rule.lhs = ExpectTerminalLexeme(r.Child(1));
-        AppendRuleAltList(r.Child(3), parse_table, rule.alternatives);
+        AppendRuleAltList(r.Child(3), parse_table, spec, rule.alternatives);
         spec.rules.push_back(std::move(rule));
         return;
     }
 
     throw BuildException("unsupported Decl CST shape");
+}
+
+void FinalizeImplicitLiteralTerminals(Stage2SpecAST &spec) {
+    std::unordered_set<std::string> explicit_terminals(spec.terminals.begin(),
+                                                       spec.terminals.end());
+    for (const LiteralTerminalDecl &decl : spec.literal_terminals) {
+        if (decl.is_explicit &&
+            explicit_terminals.find(decl.terminal_name) ==
+                explicit_terminals.end()) {
+            throw BuildException("literal '" + decl.lexeme +
+                                 "' is mapped to unknown explicit token '" +
+                                 decl.terminal_name + "'");
+        }
+        if (!decl.is_explicit &&
+            explicit_terminals.find(decl.terminal_name) !=
+                explicit_terminals.end()) {
+            throw BuildException(
+                "generated literal token name '" + decl.terminal_name +
+                "' for lexeme '" + decl.lexeme +
+                "' conflicts with an explicit token declaration");
+        }
+    }
+
+    for (const LiteralTerminalDecl &decl : spec.literal_terminals) {
+        if (!decl.is_explicit) {
+            spec.terminals.push_back(decl.terminal_name);
+        }
+    }
 }
 
 std::string ActionArgToString(const ActionArg &arg) {
@@ -894,6 +1274,26 @@ void ValidateRuleAlternative(const RuleAlternative &alt,
         if (alt.action.cpp_code.empty()) {
             throw BuildException("inline cpp action is empty in rule '" + lhs +
                                  "'");
+        }
+        const std::vector<InlineCppPlaceholderRef> refs =
+            FindInlineCppPlaceholders(alt.action.cpp_code);
+        for (const InlineCppPlaceholderRef &ref : refs) {
+            check_rhs_ref(ref.rhs_index);
+            const std::string &symbol = alt.symbols[ref.rhs_index - 1];
+            const bool is_terminal =
+                (ctx.terminal_set.find(symbol) != ctx.terminal_set.end());
+            if (ref.kind == ActionArgKind::ChildAST && is_terminal) {
+                throw BuildException(
+                    "inline cpp placeholder $" + std::to_string(ref.rhs_index) +
+                    " refers to terminal symbol '" + symbol +
+                    "'; use .lexeme instead");
+            }
+            if (ref.kind == ActionArgKind::ChildLexeme && !is_terminal) {
+                throw BuildException("inline cpp placeholder $" +
+                                     std::to_string(ref.rhs_index) +
+                                     ".lexeme refers to nonterminal symbol '" +
+                                     symbol + "'");
+            }
         }
         return;
     }
@@ -1174,6 +1574,7 @@ Stage2SpecAST ParseStage2Spec(std::string_view source_text) {
                 "unsupported File CST shape in stage2 spec parser");
         }
         AppendDeclList(root.Child(0), parse_table, spec);
+        FinalizeImplicitLiteralTerminals(spec);
         ValidateStage2Spec(spec);
         return spec;
     } catch (const compiler::parsergen::ParseException &) {
@@ -1278,6 +1679,20 @@ std::string Stage2SpecASTToGraphvizDot(const Stage2SpecAST &spec,
             << compiler::common::EscapeGraphvizLabel(token) << "\"];\n";
         out << "  tokens -> t" << next_id << ";\n";
         ++next_id;
+    }
+    if (!spec.literal_terminals.empty()) {
+        out << "  lit_tokens [label=\"Literal Tokens\"];\n";
+        out << "  root -> lit_tokens;\n";
+        for (const LiteralTerminalDecl &literal : spec.literal_terminals) {
+            out << "  lt" << next_id << " [label=\""
+                << compiler::common::EscapeGraphvizLabel(
+                       literal.terminal_name + " = " + literal.lexeme +
+                       (literal.is_explicit ? " (explicit)"
+                                            : " (implicit)"))
+                << "\"];\n";
+            out << "  lit_tokens -> lt" << next_id << ";\n";
+            ++next_id;
+        }
     }
 
     out << "  astdecls [label=\"AST Node Types\"];\n";

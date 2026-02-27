@@ -1,4 +1,4 @@
-// Real-valued math helpers.
+# Real-valued math helpers.
 
 fn radians(deg) {
   return deg * pi / 180;
@@ -13,8 +13,8 @@ fn factorial(n) {
     return 0;
   }
   let out = 1;
-  for (let i = 2; i <= n; i = i + 1) {
-    out = out * i;
+  for (let i = 2; i <= n; i += 1) {
+    out *= i;
   }
   return out;
 }

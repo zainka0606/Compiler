@@ -36,6 +36,8 @@ token KW_CPP = "cpp";
 
 token EQUAL = "=";
 token CODE = /`[^`]*`/;
+token STRING = /"([^"\\]|\\.)*"/;
+token CHAR = /'([^'\\]|\\.)'/;
 
 token INT = /[0-9]+/;
 token IDENT = /{{ALPHA}}{{ALNUM}}*/;

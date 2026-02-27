@@ -1,4 +1,4 @@
-// Core utilities. Loaded automatically at interpreter startup.
+# Core utilities. Loaded automatically at interpreter startup.
 
 fn sign(x) {
   return x > 0 ? 1 : (x < 0 ? -1 : 0);
@@ -27,16 +27,16 @@ fn approx_equal(a, b, epsilon) {
 
 fn sum_values(values) {
   let total = 0;
-  for (let i = 0; i < len(values); i = i + 1) {
-    total = total + values[i];
+  for (let i = 0; i < len(values); i += 1) {
+    total += values[i];
   }
   return total;
 }
 
 fn product_values(values) {
   let total = 1;
-  for (let i = 0; i < len(values); i = i + 1) {
-    total = total * values[i];
+  for (let i = 0; i < len(values); i += 1) {
+    total *= values[i];
   }
   return total;
 }
@@ -47,8 +47,8 @@ fn average(values) {
 
 fn repeat_text(text, count) {
   let out = "";
-  for (let i = 0; i < count; i = i + 1) {
-    out = out + text;
+  for (let i = 0; i < count; i += 1) {
+    out += text;
   }
   return out;
 }
@@ -58,11 +58,11 @@ fn join_text(parts, separator) {
     return "";
   }
   let out = "";
-  for (let i = 0; i < len(parts); i = i + 1) {
+  for (let i = 0; i < len(parts); i += 1) {
     if (i > 0) {
-      out = out + separator;
+      out += separator;
     }
-    out = out + parts[i];
+    out += parts[i];
   }
   return out;
 }

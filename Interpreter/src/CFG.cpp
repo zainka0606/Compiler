@@ -49,6 +49,19 @@ std::string DescribeExpr(const gen::Expr &expr) {
     if (const auto *identifier = dynamic_cast<const gen::Identifier *>(&expr)) {
         return "id(" + identifier->name() + ")";
     }
+    if (const auto *let_expr = dynamic_cast<const gen::LetExpr *>(&expr)) {
+        return "let " + let_expr->name() + " = " + DescribeExpr(let_expr->expr());
+    }
+    if (const auto *assign_expr = dynamic_cast<const gen::AssignExpr *>(&expr)) {
+        return "assign " + DescribeExpr(assign_expr->target()) + " = " +
+               DescribeExpr(assign_expr->expr());
+    }
+    if (const auto *compound_assign_expr =
+            dynamic_cast<const gen::CompoundAssignExpr *>(&expr)) {
+        return "assign " + DescribeExpr(compound_assign_expr->target()) + " " +
+               compound_assign_expr->op() + " " +
+               DescribeExpr(compound_assign_expr->expr());
+    }
     if (dynamic_cast<const gen::Add *>(&expr) != nullptr) {
         return "add";
     }
@@ -60,6 +73,9 @@ std::string DescribeExpr(const gen::Expr &expr) {
     }
     if (dynamic_cast<const gen::Divide *>(&expr) != nullptr) {
         return "div";
+    }
+    if (dynamic_cast<const gen::IntDivide *>(&expr) != nullptr) {
+        return "idiv";
     }
     if (dynamic_cast<const gen::Modulo *>(&expr) != nullptr) {
         return "mod";
@@ -137,38 +153,15 @@ std::string DescribeExpr(const gen::Expr &expr) {
     return "expr";
 }
 
-std::string DescribeForInit(const gen::ForInit &init) {
-    if (const auto *let_init = dynamic_cast<const gen::ForInitLet *>(&init)) {
-        return "let " + let_init->name() + " = " +
-               DescribeExpr(let_init->expr());
-    }
-    if (const auto *assign_init = dynamic_cast<const gen::ForInitAssign *>(&init)) {
-        return "assign " + DescribeExpr(assign_init->target()) + " = " +
-               DescribeExpr(assign_init->expr());
-    }
-    if (const auto *compound_init = dynamic_cast<const gen::ForInitCompound *>(&init)) {
-        return "assign " + DescribeExpr(compound_init->target()) + " " +
-               compound_init->op() + " " + DescribeExpr(compound_init->expr());
-    }
-    if (const auto *expr_init = dynamic_cast<const gen::ForInitExpr *>(&init)) {
-        return DescribeExpr(expr_init->expr());
-    }
-    return "init";
-}
-
 std::string DescribeStatementNode(const gen::Statement &statement) {
     if (const auto *let_stmt = dynamic_cast<const gen::LetStmt *>(&statement)) {
         return "let " + let_stmt->name();
     }
-    if (const auto *assign_stmt = dynamic_cast<const gen::AssignStmt *>(&statement)) {
-        return "assign " + DescribeExpr(assign_stmt->target());
-    }
-    if (const auto *compound_stmt = dynamic_cast<const gen::CompoundAssignStmt *>(&statement)) {
-        return "assign " + DescribeExpr(compound_stmt->target()) + " " +
-               compound_stmt->op();
-    }
     if (dynamic_cast<const gen::ReturnStmt *>(&statement) != nullptr) {
         return "return";
+    }
+    if (dynamic_cast<const gen::BreakStmt *>(&statement) != nullptr) {
+        return "break";
     }
     if (const auto *expr_stmt =
             dynamic_cast<const gen::ExprStmt *>(&statement)) {
@@ -257,14 +250,18 @@ class CFGBuilder {
         }
 
         if (dynamic_cast<const gen::LetStmt *>(&statement) != nullptr ||
-            dynamic_cast<const gen::AssignStmt *>(&statement) != nullptr ||
-            dynamic_cast<const gen::CompoundAssignStmt *>(&statement) != nullptr ||
             dynamic_cast<const gen::ExprStmt *>(&statement) != nullptr) {
             return {statement_node};
         }
 
         if (dynamic_cast<const gen::ReturnStmt *>(&statement) != nullptr) {
             AddEdge(statement_node, function_exit_id, "return");
+            return {};
+        }
+        if (dynamic_cast<const gen::BreakStmt *>(&statement) != nullptr) {
+            if (!break_targets_.empty()) {
+                AddEdge(statement_node, break_targets_.back(), "break");
+            }
             return {};
         }
 
@@ -308,16 +305,18 @@ class CFGBuilder {
 
         if (const auto *while_stmt =
                 dynamic_cast<const gen::WhileStmt *>(&statement)) {
+            const std::size_t while_end = AddNode("while_end");
             const std::size_t body_entry = AddNode("while_body");
             AddEdge(statement_node, body_entry, "T");
-            const std::vector<std::size_t> body_exits =
-                BuildStatementList(ToStatementPointers(while_stmt->body()),
-                                   {body_entry}, function_exit_id);
+            break_targets_.push_back(while_end);
+            const std::vector<std::size_t> body_exits = BuildStatementList(
+                ToStatementPointers(while_stmt->body()), {body_entry},
+                function_exit_id);
+            break_targets_.pop_back();
             for (const std::size_t body_exit : body_exits) {
                 AddEdge(body_exit, statement_node, "loop");
             }
 
-            const std::size_t while_end = AddNode("while_end");
             AddEdge(statement_node, while_end, "F");
             return {while_end};
         }
@@ -325,36 +324,40 @@ class CFGBuilder {
         if (const auto *for_stmt =
                 dynamic_cast<const gen::ForStmt *>(&statement)) {
             const std::size_t init_node =
-                AddNode("for_init " + DescribeForInit(for_stmt->init()));
+                AddNode("for_init " + DescribeExpr(for_stmt->init()));
             AddEdge(statement_node, init_node);
 
             const std::size_t cond_node =
                 AddNode("for_cond " + DescribeExpr(for_stmt->condition()));
             AddEdge(init_node, cond_node);
 
+            const std::size_t for_end = AddNode("for_end");
             const std::size_t body_entry = AddNode("for_body");
             AddEdge(cond_node, body_entry, "T");
-            const std::vector<std::size_t> body_exits =
-                BuildStatementList(ToStatementPointers(for_stmt->body()),
-                                   {body_entry}, function_exit_id);
+            break_targets_.push_back(for_end);
+            const std::vector<std::size_t> body_exits = BuildStatementList(
+                ToStatementPointers(for_stmt->body()), {body_entry},
+                function_exit_id);
+            break_targets_.pop_back();
 
             if (!body_exits.empty()) {
                 const std::size_t update_node = AddNode(
-                    "for_update " + DescribeForInit(for_stmt->update()));
+                    "for_update " + DescribeExpr(for_stmt->update()));
                 for (const std::size_t body_exit : body_exits) {
                     AddEdge(body_exit, update_node);
                 }
                 AddEdge(update_node, cond_node, "loop");
             }
 
-            const std::size_t for_end = AddNode("for_end");
             AddEdge(cond_node, for_end, "F");
             return {for_end};
         }
 
         if (const auto *switch_stmt =
                 dynamic_cast<const gen::SwitchStmt *>(&statement)) {
+            const std::size_t switch_end = AddNode("switch_end");
             std::vector<std::size_t> exits;
+            break_targets_.push_back(switch_end);
             for (std::size_t i = 0; i < switch_stmt->cases().size(); ++i) {
                 const std::unique_ptr<gen::SwitchCase> &switch_case =
                     switch_stmt->cases()[i];
@@ -378,18 +381,15 @@ class CFGBuilder {
                                        {default_entry}, function_exit_id);
                 exits.insert(exits.end(), default_exits.begin(), default_exits.end());
             }
+            break_targets_.pop_back();
 
-            if (exits.empty()) {
-                return {statement_node};
-            }
-            if (exits.size() == 1) {
-                return exits;
-            }
-            const std::size_t merge_node = AddNode("switch_end");
             for (const std::size_t exit : exits) {
-                AddEdge(exit, merge_node);
+                AddEdge(exit, switch_end);
             }
-            return {merge_node};
+            if (switch_stmt->default_body().empty()) {
+                AddEdge(statement_node, switch_end, "no-match");
+            }
+            return {switch_end};
         }
 
         return {statement_node};
@@ -397,6 +397,7 @@ class CFGBuilder {
 
     CFGGraph graph_;
     std::size_t next_node_id_ = 0;
+    std::vector<std::size_t> break_targets_;
 };
 
 CFGGraph

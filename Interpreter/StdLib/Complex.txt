@@ -1,4 +1,4 @@
-// Complex numbers and complex analysis helpers.
+# Complex numbers and complex analysis helpers.
 
 class Complex {
   re;

@@ -18,40 +18,12 @@ using GeneratedParser = generated::MiniLang::MiniLangParser;
 
 const char *TerminalNameForToken(GeneratedTokenKind kind) {
     switch (kind) {
-    case GeneratedTokenKind::KW_FN:
-        return "KW_FN";
-    case GeneratedTokenKind::KW_LET:
-        return "KW_LET";
-    case GeneratedTokenKind::KW_RETURN:
-        return "KW_RETURN";
     case GeneratedTokenKind::ID:
         return "ID";
     case GeneratedTokenKind::NUMBER:
         return "NUMBER";
-    case GeneratedTokenKind::PLUS:
-        return "PLUS";
-    case GeneratedTokenKind::MINUS:
-        return "MINUS";
-    case GeneratedTokenKind::STAR:
-        return "STAR";
-    case GeneratedTokenKind::SLASH:
-        return "SLASH";
-    case GeneratedTokenKind::CARET:
-        return "CARET";
-    case GeneratedTokenKind::EQUAL:
-        return "EQUAL";
-    case GeneratedTokenKind::COMMA:
-        return "COMMA";
-    case GeneratedTokenKind::SEMI:
-        return "SEMI";
-    case GeneratedTokenKind::LPAREN:
-        return "LPAREN";
-    case GeneratedTokenKind::RPAREN:
-        return "RPAREN";
-    case GeneratedTokenKind::LBRACE:
-        return "LBRACE";
-    case GeneratedTokenKind::RBRACE:
-        return "RBRACE";
+    case GeneratedTokenKind::SYMBOL:
+        return "SYMBOL";
     case GeneratedTokenKind::EndOfFile:
         return "$";
     }

@@ -29,6 +29,8 @@ token DOLLAR;
 token DOT;
 token EQUAL;
 token CODE;
+token STRING;
+token CHAR;
 
 rule File -> DeclList;
 rule DeclList -> DeclList Decl | Decl;
@@ -36,7 +38,7 @@ rule Decl -> GrammarDecl | StartDecl | TokenDecl | AstBaseDecl | AstDecl | RuleD
 
 rule GrammarDecl -> KW_GRAMMAR IDENT SEMI;
 rule StartDecl -> KW_START IDENT SEMI;
-rule TokenDecl -> KW_TOKEN IDENT SEMI;
+rule TokenDecl -> KW_TOKEN IDENT SEMI | KW_TOKEN IDENT EQUAL STRING SEMI | KW_TOKEN IDENT EQUAL CHAR SEMI;
 
 rule AstBaseDecl -> KW_ASTBASE IDENT SEMI
                   | KW_ASTBASE IDENT COLON IDENT SEMI
@@ -62,7 +64,8 @@ rule MethodImplDecl -> KW_OVERRIDE IDENT LPAREN RPAREN ARROW IDENT EQUAL CODE SE
 rule RuleDecl -> KW_RULE IDENT ARROW RuleAltList SEMI;
 rule RuleAltList -> RuleAltList PIPE RuleAlt | RuleAlt;
 rule RuleAlt -> SymbolList | SymbolList FATARROW ActionExpr;
-rule SymbolList -> SymbolList IDENT | IDENT;
+rule SymbolList -> SymbolList Symbol | Symbol;
+rule Symbol -> IDENT | STRING | CHAR;
 
 rule ActionExpr -> IDENT LPAREN RPAREN | IDENT LPAREN ActionArgList RPAREN | KW_CPP CODE;
 rule ActionArgList -> ActionArgList COMMA ActionArg | ActionArg;

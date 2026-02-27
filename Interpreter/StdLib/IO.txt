@@ -1,4 +1,4 @@
-// File and text helpers built on top of core file primitives.
+# File and text helpers built on top of core file primitives.
 
 fn is_whitespace_char(ch) {
   return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
@@ -7,7 +7,7 @@ fn is_whitespace_char(ch) {
 fn split_whitespace(text) {
   let tokens = [];
   let current = "";
-  for (let i = 0; i < len(text); i = i + 1) {
+  for (let i = 0; i < len(text); i += 1) {
     let ch = text[i];
     if (is_whitespace_char(ch)) {
       if (len(current) > 0) {
@@ -15,7 +15,7 @@ fn split_whitespace(text) {
         current = "";
       }
     } else {
-      current = current + ch;
+      current += ch;
     }
   }
   if (len(current) > 0) {
@@ -29,14 +29,14 @@ fn read_lines(path) {
   let lines = [];
   let current = "";
 
-  for (let i = 0; i < len(text); i = i + 1) {
+  for (let i = 0; i < len(text); i += 1) {
     let ch = text[i];
     if (ch == '\n') {
       push(lines, current);
       current = "";
     } else {
       if (ch != '\r') {
-        current = current + ch;
+        current += ch;
       }
     }
   }

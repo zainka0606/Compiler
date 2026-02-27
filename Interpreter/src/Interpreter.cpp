@@ -42,6 +42,8 @@ const char* TerminalNameForToken(GeneratedTokenKind kind) {
             return "KW_LET";
         case GeneratedTokenKind::KW_RETURN:
             return "KW_RETURN";
+        case GeneratedTokenKind::KW_BREAK:
+            return "KW_BREAK";
         case GeneratedTokenKind::KW_IF:
             return "KW_IF";
         case GeneratedTokenKind::KW_ELSE:
@@ -120,6 +122,8 @@ const char* TerminalNameForToken(GeneratedTokenKind kind) {
             return "STAR";
         case GeneratedTokenKind::SLASH:
             return "SLASH";
+        case GeneratedTokenKind::IDIV:
+            return "IDIV";
         case GeneratedTokenKind::MOD:
             return "MOD";
         case GeneratedTokenKind::AMP:
@@ -488,6 +492,19 @@ std::string DescribeExpr(const gen::Expr& expr) {
     if (const auto* identifier = dynamic_cast<const gen::Identifier*>(&expr)) {
         return "id(" + identifier->name() + ")";
     }
+    if (const auto* let_expr = dynamic_cast<const gen::LetExpr*>(&expr)) {
+        return "let " + let_expr->name() + " = " + DescribeExpr(let_expr->expr());
+    }
+    if (const auto* assign_expr = dynamic_cast<const gen::AssignExpr*>(&expr)) {
+        return "assign " + DescribeExpr(assign_expr->target()) + " = " +
+               DescribeExpr(assign_expr->expr());
+    }
+    if (const auto* compound_assign_expr =
+            dynamic_cast<const gen::CompoundAssignExpr*>(&expr)) {
+        return "assign " + DescribeExpr(compound_assign_expr->target()) + " " +
+               compound_assign_expr->op() + " " +
+               DescribeExpr(compound_assign_expr->expr());
+    }
     if (dynamic_cast<const gen::Add*>(&expr) != nullptr) {
         return "add";
     }
@@ -499,6 +516,9 @@ std::string DescribeExpr(const gen::Expr& expr) {
     }
     if (dynamic_cast<const gen::Divide*>(&expr) != nullptr) {
         return "div";
+    }
+    if (dynamic_cast<const gen::IntDivide*>(&expr) != nullptr) {
+        return "idiv";
     }
     if (dynamic_cast<const gen::Modulo*>(&expr) != nullptr) {
         return "mod";
@@ -575,36 +595,15 @@ std::string DescribeExpr(const gen::Expr& expr) {
     return "expr";
 }
 
-std::string DescribeForInit(const gen::ForInit& init) {
-    if (const auto* let_init = dynamic_cast<const gen::ForInitLet*>(&init)) {
-        return "let " + let_init->name() + " = " + DescribeExpr(let_init->expr());
-    }
-    if (const auto* assign_init = dynamic_cast<const gen::ForInitAssign*>(&init)) {
-        return "assign " + DescribeExpr(assign_init->target()) + " = " + DescribeExpr(assign_init->expr());
-    }
-    if (const auto* compound_init = dynamic_cast<const gen::ForInitCompound*>(&init)) {
-        return "assign " + DescribeExpr(compound_init->target()) + " " + compound_init->op() + " " +
-               DescribeExpr(compound_init->expr());
-    }
-    if (const auto* expr_init = dynamic_cast<const gen::ForInitExpr*>(&init)) {
-        return DescribeExpr(expr_init->expr());
-    }
-    return "init";
-}
-
 std::string DescribeStatement(const gen::Statement& statement) {
     if (const auto* let_stmt = dynamic_cast<const gen::LetStmt*>(&statement)) {
         return "let " + let_stmt->name() + " = " + DescribeExpr(let_stmt->expr());
     }
-    if (const auto* assign_stmt = dynamic_cast<const gen::AssignStmt*>(&statement)) {
-        return "assign " + DescribeExpr(assign_stmt->target()) + " = " + DescribeExpr(assign_stmt->expr());
-    }
-    if (const auto* compound_stmt = dynamic_cast<const gen::CompoundAssignStmt*>(&statement)) {
-        return "assign " + DescribeExpr(compound_stmt->target()) + " " + compound_stmt->op() + " " +
-               DescribeExpr(compound_stmt->expr());
-    }
     if (const auto* return_stmt = dynamic_cast<const gen::ReturnStmt*>(&statement)) {
         return "return " + DescribeExpr(return_stmt->expr());
+    }
+    if (dynamic_cast<const gen::BreakStmt*>(&statement) != nullptr) {
+        return "break";
     }
     if (const auto* expr_stmt = dynamic_cast<const gen::ExprStmt*>(&statement)) {
         return DescribeExpr(expr_stmt->expr());
@@ -619,8 +618,9 @@ std::string DescribeStatement(const gen::Statement& statement) {
         return "while (" + DescribeExpr(while_stmt->condition()) + ")";
     }
     if (const auto* for_stmt = dynamic_cast<const gen::ForStmt*>(&statement)) {
-        return "for (" + DescribeForInit(for_stmt->init()) + "; " + DescribeExpr(for_stmt->condition()) + "; " +
-               DescribeForInit(for_stmt->update()) + ")";
+        return "for (" + DescribeExpr(for_stmt->init()) + "; " +
+               DescribeExpr(for_stmt->condition()) + "; " +
+               DescribeExpr(for_stmt->update()) + ")";
     }
     if (const auto* switch_stmt = dynamic_cast<const gen::SwitchStmt*>(&statement)) {
         return "switch (" + DescribeExpr(switch_stmt->condition()) + ") cases=" +
@@ -685,8 +685,43 @@ bool IsBuiltinFunction(std::string_view name) {
     return name == "sin" || name == "cos" || name == "tan" || name == "sqrt" || name == "abs" || name == "exp" ||
            name == "ln" || name == "log10" || name == "pow" || name == "min" || name == "max" || name == "sum" ||
            name == "print" || name == "println" || name == "readln" || name == "input" || name == "read_file" ||
-           name == "write_file" || name == "append_file" || name == "file_exists" || name == "file_size" ||
-           name == "len" || name == "push" || name == "pop";
+           name == "write_file" || name == "append_file" || name == "read_binary_file" ||
+           name == "write_binary_file" || name == "append_binary_file" || name == "file_exists" ||
+           name == "file_size" || name == "len" || name == "push" || name == "pop";
+}
+
+std::vector<std::uint8_t> ToByteBuffer(const Value& value, std::string_view context) {
+    if (const auto* text = std::get_if<std::string>(&value)) {
+        return std::vector<std::uint8_t>(text->begin(), text->end());
+    }
+    if (const auto* character = std::get_if<char>(&value)) {
+        return {static_cast<std::uint8_t>(*character)};
+    }
+    if (const auto* array = std::get_if<ArrayInstancePtr>(&value)) {
+        if (!(*array)) {
+            throw InterpreterException(std::string(context) + " expects a non-null array of bytes");
+        }
+        std::vector<std::uint8_t> bytes;
+        bytes.reserve((*array)->elements.size());
+        for (const Value& element : (*array)->elements) {
+            const std::int64_t raw = AsInt64(element, context);
+            if (raw < 0 || raw > 255) {
+                throw InterpreterException(std::string(context) + " byte value must be in range [0, 255]");
+            }
+            bytes.push_back(static_cast<std::uint8_t>(raw));
+        }
+        return bytes;
+    }
+    throw InterpreterException(std::string(context) + " expects a byte array, string, or char");
+}
+
+Value ByteArrayToValue(const std::vector<std::uint8_t>& bytes) {
+    auto out = std::make_shared<ArrayInstance>();
+    out->elements.reserve(bytes.size());
+    for (const std::uint8_t byte : bytes) {
+        out->elements.push_back(static_cast<double>(byte));
+    }
+    return out;
 }
 
 Value CallBuiltin(std::string_view name, const std::vector<Value>& args) {
@@ -785,6 +820,49 @@ Value CallBuiltin(std::string_view name, const std::vector<Value>& args) {
             throw InterpreterException("append_file failed to write: " + path);
         }
         return static_cast<double>(content.size());
+    }
+
+    if (name == "read_binary_file") {
+        require_count(1);
+        const std::string path = AsString(args[0]);
+        std::ifstream input(path, std::ios::binary);
+        if (!input.is_open()) {
+            throw InterpreterException("read_binary_file failed to open: " + path);
+        }
+        std::ostringstream buffer;
+        buffer << input.rdbuf();
+        const std::string content = buffer.str();
+        return ByteArrayToValue(std::vector<std::uint8_t>(content.begin(), content.end()));
+    }
+
+    if (name == "write_binary_file") {
+        require_count(2);
+        const std::string path = AsString(args[0]);
+        const std::vector<std::uint8_t> bytes = ToByteBuffer(args[1], "write_binary_file");
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        if (!output.is_open()) {
+            throw InterpreterException("write_binary_file failed to open: " + path);
+        }
+        output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        if (!output.good()) {
+            throw InterpreterException("write_binary_file failed to write: " + path);
+        }
+        return static_cast<double>(bytes.size());
+    }
+
+    if (name == "append_binary_file") {
+        require_count(2);
+        const std::string path = AsString(args[0]);
+        const std::vector<std::uint8_t> bytes = ToByteBuffer(args[1], "append_binary_file");
+        std::ofstream output(path, std::ios::binary | std::ios::app);
+        if (!output.is_open()) {
+            throw InterpreterException("append_binary_file failed to open: " + path);
+        }
+        output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        if (!output.good()) {
+            throw InterpreterException("append_binary_file failed to write: " + path);
+        }
+        return static_cast<double>(bytes.size());
     }
 
     if (name == "file_exists") {
@@ -943,6 +1021,7 @@ bool AssignExistingVariable(std::string_view name, Value value, RuntimeEnvironme
 
 struct StatementResult {
     bool returned = false;
+    bool broke = false;
     Value value = std::monostate{};
 };
 
@@ -1024,6 +1103,9 @@ Value CallUserFunction(const gen::FunctionDecl& function, const std::vector<Valu
     } guard{env};
 
     const StatementResult result = ExecuteStatementList(function.body(), env, false);
+    if (result.broke) {
+        throw InterpreterException("break used outside loop or switch");
+    }
     return result.value;
 }
 
@@ -1055,6 +1137,9 @@ Value CallMethod(const ObjectInstancePtr& self_object, const gen::MethodDecl& me
     } guard{env};
 
     const StatementResult result = ExecuteStatementList(method.body(), env, false);
+    if (result.broke) {
+        throw InterpreterException("break used outside loop or switch");
+    }
     return result.value;
 }
 
@@ -1369,33 +1454,11 @@ StatementResult ExecuteStatementList(const std::vector<std::unique_ptr<gen::Stat
             continue;
         }
         last = ExecuteStatement(*statement, env);
-        if (last.returned) {
+        if (last.returned || last.broke) {
             return last;
         }
     }
     return last;
-}
-
-void ExecuteForInit(const gen::ForInit& init, RuntimeEnvironment& env) {
-    if (const auto* let_init = dynamic_cast<const gen::ForInitLet*>(&init)) {
-        AssignVariable(let_init->name(), EvaluateExpr(let_init->expr(), env), env);
-        return;
-    }
-    if (const auto* assign_init = dynamic_cast<const gen::ForInitAssign*>(&init)) {
-        (void) AssignToTarget(assign_init->target(), EvaluateExpr(assign_init->expr(), env), env);
-        return;
-    }
-    if (const auto* compound_init = dynamic_cast<const gen::ForInitCompound*>(&init)) {
-        const Value current = EvaluateExpr(compound_init->target(), env);
-        const Value rhs = EvaluateExpr(compound_init->expr(), env);
-        (void) AssignToTarget(compound_init->target(), ApplyCompoundOperation(compound_init->op(), current, rhs, env), env);
-        return;
-    }
-    if (const auto* expr_init = dynamic_cast<const gen::ForInitExpr*>(&init)) {
-        (void) EvaluateExpr(expr_init->expr(), env);
-        return;
-    }
-    throw InterpreterException("unsupported for-init node");
 }
 
 Value EvaluateExpr(const gen::Expr& expr, RuntimeEnvironment& env) {
@@ -1426,6 +1489,25 @@ Value EvaluateExpr(const gen::Expr& expr, RuntimeEnvironment& env) {
     }
     if (const auto* identifier = dynamic_cast<const gen::Identifier*>(&expr)) {
         return LookupVariable(identifier->name(), env);
+    }
+    if (const auto* let_expr = dynamic_cast<const gen::LetExpr*>(&expr)) {
+        Value value = EvaluateExpr(let_expr->expr(), env);
+        AssignVariable(let_expr->name(), value, env);
+        return value;
+    }
+    if (const auto* assign_expr = dynamic_cast<const gen::AssignExpr*>(&expr)) {
+        Value value = EvaluateExpr(assign_expr->expr(), env);
+        return AssignToTarget(assign_expr->target(), std::move(value), env);
+    }
+    if (const auto* compound_assign_expr =
+            dynamic_cast<const gen::CompoundAssignExpr*>(&expr)) {
+        const Value current = EvaluateExpr(compound_assign_expr->target(), env);
+        const Value rhs = EvaluateExpr(compound_assign_expr->expr(), env);
+        return AssignToTarget(
+            compound_assign_expr->target(),
+            ApplyCompoundOperation(compound_assign_expr->op(), current, rhs,
+                                   env),
+            env);
     }
     if (const auto* array_literal = dynamic_cast<const gen::ArrayLiteral*>(&expr)) {
         auto array = std::make_shared<ArrayInstance>();
@@ -1526,6 +1608,22 @@ Value EvaluateExpr(const gen::Expr& expr, RuntimeEnvironment& env) {
             throw InterpreterException("division by zero");
         }
         return AsNumber(lhs, "/") / rhs;
+    }
+    if (const auto* idiv = dynamic_cast<const gen::IntDivide*>(&expr)) {
+        const Value lhs = EvaluateExpr(idiv->lhs(), env);
+        const Value rhs_value = EvaluateExpr(idiv->rhs(), env);
+        Value overloaded_result;
+        if (TryCallOperator(lhs, "__floordiv__", {rhs_value}, env, overloaded_result)) {
+            return overloaded_result;
+        }
+        if (TryCallOperator(rhs_value, "__rfloordiv__", {lhs}, env, overloaded_result)) {
+            return overloaded_result;
+        }
+        const double rhs = AsNumber(rhs_value, "//");
+        if (rhs == 0.0) {
+            throw InterpreterException("integer division by zero");
+        }
+        return std::floor(AsNumber(lhs, "//") / rhs);
     }
     if (const auto* mod = dynamic_cast<const gen::Modulo*>(&expr)) {
         const Value lhs = EvaluateExpr(mod->lhs(), env);
@@ -1734,24 +1832,11 @@ StatementResult ExecuteStatement(const gen::Statement& statement, RuntimeEnviron
         AssignVariable(let_stmt->name(), value, env);
         return StatementResult{.returned = false, .value = std::move(value)};
     }
-    if (const auto* assign_stmt = dynamic_cast<const gen::AssignStmt*>(&statement)) {
-        Value value = EvaluateExpr(assign_stmt->expr(), env);
-        return StatementResult{
-            .returned = false,
-            .value = AssignToTarget(assign_stmt->target(), std::move(value), env),
-        };
-    }
-    if (const auto* compound_stmt = dynamic_cast<const gen::CompoundAssignStmt*>(&statement)) {
-        const Value current = EvaluateExpr(compound_stmt->target(), env);
-        const Value rhs = EvaluateExpr(compound_stmt->expr(), env);
-        return StatementResult{
-            .returned = false,
-            .value = AssignToTarget(compound_stmt->target(),
-                                    ApplyCompoundOperation(compound_stmt->op(), current, rhs, env), env),
-        };
-    }
     if (const auto* return_stmt = dynamic_cast<const gen::ReturnStmt*>(&statement)) {
         return StatementResult{.returned = true, .value = EvaluateExpr(return_stmt->expr(), env)};
+    }
+    if (dynamic_cast<const gen::BreakStmt*>(&statement) != nullptr) {
+        return StatementResult{.broke = true};
     }
     if (const auto* expr_stmt = dynamic_cast<const gen::ExprStmt*>(&statement)) {
         return StatementResult{.returned = false, .value = EvaluateExpr(expr_stmt->expr(), env)};
@@ -1769,6 +1854,9 @@ StatementResult ExecuteStatement(const gen::Statement& statement, RuntimeEnviron
             if (body.returned) {
                 return body;
             }
+            if (body.broke) {
+                break;
+            }
             last = body.value;
         }
         return StatementResult{.returned = false, .value = std::move(last)};
@@ -1782,7 +1870,7 @@ StatementResult ExecuteStatement(const gen::Statement& statement, RuntimeEnviron
             }
         } guard{env};
 
-        ExecuteForInit(for_stmt->init(), env);
+        (void) EvaluateExpr(for_stmt->init(), env);
 
         Value last = std::monostate{};
         while (IsTruthy(EvaluateExpr(for_stmt->condition(), env))) {
@@ -1790,22 +1878,37 @@ StatementResult ExecuteStatement(const gen::Statement& statement, RuntimeEnviron
             if (body.returned) {
                 return body;
             }
+            if (body.broke) {
+                break;
+            }
             last = body.value;
-            ExecuteForInit(for_stmt->update(), env);
+            (void) EvaluateExpr(for_stmt->update(), env);
         }
         return StatementResult{.returned = false, .value = std::move(last)};
     }
     if (const auto* switch_stmt = dynamic_cast<const gen::SwitchStmt*>(&statement)) {
+        const auto execute_switch_body = [&](const std::vector<std::unique_ptr<gen::Statement>>& body)
+                                             -> StatementResult {
+            const StatementResult branch = ExecuteStatementList(body, env, true);
+            if (branch.returned) {
+                return branch;
+            }
+            if (branch.broke) {
+                return StatementResult{.returned = false, .broke = false, .value = branch.value};
+            }
+            return branch;
+        };
+
         const Value condition = EvaluateExpr(switch_stmt->condition(), env);
         for (const std::unique_ptr<gen::SwitchCase>& switch_case : switch_stmt->cases()) {
             if (!switch_case) {
                 continue;
             }
             if (ValueEquals(condition, EvaluateExpr(switch_case->match(), env))) {
-                return ExecuteStatementList(switch_case->body(), env, true);
+                return execute_switch_body(switch_case->body());
             }
         }
-        return ExecuteStatementList(switch_stmt->default_body(), env, true);
+        return execute_switch_body(switch_stmt->default_body());
     }
 
     throw InterpreterException("unsupported statement node");
@@ -1942,6 +2045,9 @@ Value ExecuteTopLevelStatements(const gen::Program& program, RuntimeEnvironment&
                     return last_value;
                 }
                 throw InterpreterException("top-level return is not allowed in " + std::string(unit_name));
+            }
+            if (result.broke) {
+                throw InterpreterException("top-level break is not allowed in " + std::string(unit_name));
             }
         }
     }

@@ -1,19 +1,14 @@
-// Mandelbrot renderer using the startup standard library.
-// Uses stdlib Complex plus a local escape routine and array palette.
+# Mandelbrot renderer using the startup standard library.
+# Uses stdlib Complex plus a local escape routine and string palette.
 
-let ASCII = [" ", ".", ":", "-", "=", "+", "*", "#", "%", "@", "@"];
+let ASCII = " .:-=+*#%@@";
 
 fn Pixel(iter, max_iter) {
+  let last = len(ASCII) - 1;
   if (iter >= max_iter) {
-    return ASCII[len(ASCII) - 1];
+    return ASCII[last];
   }
-
-  let idx = 0;
-  for (let i = 0; i < len(ASCII); i = i + 1) {
-    if (i * max_iter <= iter * (len(ASCII) - 1)) {
-      idx = i;
-    }
-  }
+  let idx = iter * last // max_iter;
   return ASCII[idx];
 }
 
@@ -22,7 +17,7 @@ fn complex_mandelbrot_escape(c, max_iter) {
   let iter = 0;
   while (iter < max_iter && z.abs2() <= 4) {
     z = z * z + c;
-    iter = iter + 1;
+    iter += 1;
   }
   return iter;
 }
@@ -30,16 +25,16 @@ fn complex_mandelbrot_escape(c, max_iter) {
 fn RenderMandelbrot() {
   let max_iter = 48;
   let width = 79;
-  let half_w = width / 2;
+  let half_w = width // 2;
   let x_scale = 30;
   let y_scale = 12;
 
-  for (let yi = -12; yi <= 12; yi = yi + 1) {
+  for (let yi = -12; yi <= 12; yi += 1) {
     let line = "";
-    for (let xi = -half_w; xi <= half_w; xi = xi + 1) {
+    for (let xi = -half_w; xi <= half_w; xi += 1) {
       let c = Complex(xi / x_scale - (3 / 4), yi / y_scale);
       let iter = complex_mandelbrot_escape(c, max_iter);
-      line = line + Pixel(iter, max_iter);
+      line += Pixel(iter, max_iter);
     }
     println(line);
   }
