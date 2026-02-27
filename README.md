@@ -1,89 +1,150 @@
-# Compiler (Custom Language)
+# Compiler
 
-This repository includes a working first-version lexer generator (`LexerGenerator`) built with a handwritten
-lexer/parser for its own spec language.
-It also includes a top-down (recursive-descent) regex parser, Thompson-style NFA construction, NFA->DFA conversion, and
-DFA minimization.
+This repository is a multi-stage compiler/tooling playground with:
 
-## Project Layout
+- regex parsing + NFA/DFA/minimization primitives
+- a lexer generator
+- LR-family parser generators (`LR0`, `SLR`, `LR1`)
+- a staged parser generator pipeline (`ParserGeneratorStage1` -> `ParserGenerator`)
+- generated-parser consumers (`Parser`, `Example*` modules)
+- an interactive interpreter with AST + CFG dumps
 
-- `CMakeLists.txt` - top-level build config (uses `add_subdirectory(Regex)` and `add_subdirectory(LexerGenerator)`)
-- `Regex/CMakeLists.txt` - regex library + regex test targets
-- `Regex/include/Parser.h` - public AST and parser API
-- `Regex/include/NFA.h` - NFA data structures, compiler, and NFA matcher
-- `Regex/include/DFA.h` - DFA compiler and matcher
-- `Regex/include/DFAMinimizer.h` - DFA minimization
-- `Regex/src/Parser.cpp` - recursive-descent regex parser implementation
-- `Regex/src/NFA.cpp` - regex AST to NFA conversion (Thompson construction)
-- `Regex/src/DFA.cpp` - NFA to DFA conversion
-- `Regex/src/DFAMinimizer.cpp` - DFA minimization
-- `Regex/tests/*.cpp` - regex parser/NFA/DFA/minimizer tests
-- `LexerGenerator/CMakeLists.txt` - lexer generator library, CLI, and tests
-- `LexerGenerator/include/Generator.h` - lexer spec parser, compiler, codegen, and debug dump APIs
-- `LexerGenerator/src/Parser.cpp` - handwritten lexer/parser for lexer generator specs
-- `LexerGenerator/src/Generator.cpp` - spec compilation, code generation, tokenization, and debug dumps
-- `LexerGenerator/src/CLI.cpp` / `LexerGenerator/src/Main.cpp` - `LexerGenerator` command-line tool
+## Top-Level Modules
 
-## Supported Regex Syntax (Current)
+- `Common` - shared utilities and CMake helpers (including generator custom-command wrappers)
+- `Regex` - regex parser + NFA/DFA/minimizer libraries and tests
+- `LexerGenerator` - `.lex` -> generated C++ lexer (+ optional AST/NFA/DFA Graphviz dumps)
+- `LR0ParserGenerator` - `.lr0` grammar analysis dumps (`AST`, canonical collection, parse table)
+- `SLRParserGenerator` - `.slr` grammar analysis dumps
+- `LR1ParserGenerator` - `.lr1` grammar analysis dumps
+- `ParserGeneratorStage1` - stage-1 generic parser generator
+- `ParserGenerator` - stage-2 generator (typed AST, inline C++ rule actions)
+- `Parser` - parser module built from `ParserGenerator`
+- `Interpreter` - parser+runtime module with REPL/file mode and CFG generation
+- `ExampleLexer`, `ExampleLR0Parser`, `ExampleSLRParser`, `ExampleLR1Parser`, `ExampleLR1Calculator`, `ExampleCalculator` - runnable reference modules
 
-- Literals (for example `a`, `b`, `1`)
-- Concatenation (for example `ab`)
-- Alternation (`|`)
-- Grouping with parentheses (`( ... )`)
-- Wildcard dot (`.`)
-- Quantifiers: `*`, `+`, `?`, `{m}`, `{m,}`, `{m,n}`
-- Character classes: `[abc]`, `[a-z]`, `[^a-z]`
-- Basic escapes: `\n`, `\t`, `\r`, `\\`, and escaping metacharacters (for example `\.`)
+## Build
 
-## Build And Test
+The project is commonly built in `cmake-build-debug`:
 
 ```bash
-cmake -S . -B build
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake -S . -B cmake-build-debug
+cmake --build cmake-build-debug --parallel
+ctest --test-dir cmake-build-debug --output-on-failure
 ```
 
-## Lexer Generator (`LexerGenerator`)
+All binaries are emitted under:
 
-The generator parses a small handwritten spec language and emits a table-driven C++ lexer.
+- `cmake-build-debug/bin`
 
-Example spec:
+## File Type Conventions
 
-```text
-lexer DemoLexer;
-namespace demo::lang;
-token_enum DemoTokenKind;
+- Lexer specs: `*.lex`
+- LR(0) specs: `*.lr0`
+- SLR specs: `*.slr`
+- LR(1) specs: `*.lr1`
+- ParserGenerator (stage-2) specs: `*.pg`
 
-let DIGIT = /[0-9]/;
-skip WS = /[ \t\r\n]+/;
-token INT = /{{DIGIT}}+/;
-token PLUS = /\+/;
-```
+## Generator CLI Quick Start
 
-Generate code:
+Output directories are derived from the input filename stem.
+Example: `Foo.lex` -> `Foo/`, `Grammar.lr1` -> `Grammar/`.
+
+### LexerGenerator
 
 ```bash
-LexerGenerator --input Test.lex
+./cmake-build-debug/bin/LexerGenerator --input path/to/Test.lex \
+  --dump-ast --dump-nfa --dump-dfa
 ```
 
-Debug dumps (written under a derived output directory named after the input file stem):
+Typical outputs in `Test/`:
+
+- `AST.dot`
+- `NFA/*.dot`
+- `DFA.dot`
+- generated lexer `.h/.cpp` (default names come from the lexer declaration)
+
+### LR0 / SLR / LR1 parser generators
 
 ```bash
-LexerGenerator --input Test.lex \
-  --dump-ast \
-  --dump-nfa \
-  --dump-dfa
+./cmake-build-debug/bin/LR0ParserGenerator --input path/to/Grammar.lr0
+./cmake-build-debug/bin/SLRParserGenerator --input path/to/Grammar.slr
+./cmake-build-debug/bin/LR1ParserGenerator --input path/to/Grammar.lr1
 ```
 
-Generated debug files (for `Test.lex`, output directory is `Test/`):
+Each writes:
 
-- `Test/AST.dot`
-- `Test/NFA/*.dot`
-- `Test/DFA.dot` (combined lexer DFA)
+- `AST.dot`
+- `CanonicalCollection.dot`
+- `ParseTable.dot`
 
-## Notes
+### ParserGeneratorStage1 / ParserGenerator
 
-- The parser returns an AST (`RegexNode`) and throws `compiler::regex::ParseException` on invalid input.
-- `CompileToNFA(...)` / `CompilePatternToNFA(...)` produce an epsilon-NFA and `NFAMatches(...)` runs it.
-- `CompileNFAToDFA(...)`, `MinimizeDFA(...)`, and the lexer generator build on top of those automata primitives.
-- The lexer generator builds a combined multi-rule DFA for lexing (longest-match, then rule-order priority).
+```bash
+./cmake-build-debug/bin/ParserGeneratorStage1 --input path/to/Spec.lr1
+./cmake-build-debug/bin/ParserGenerator --input path/to/Spec.pg
+```
+
+`ParserGenerator` supports:
+
+- typed AST declarations
+- list-typed fields (`Type[]`)
+- inline C++ rule actions (`=> cpp \`...\``)
+
+## Interpreter
+
+Binary:
+
+```bash
+./cmake-build-debug/bin/Interpreter
+```
+
+Modes:
+
+- no args: interactive REPL
+- file mode: `Interpreter <input-file> [ast-dot-output]`
+
+In file mode it writes:
+
+- AST dot file (path from arg or `AST.dot`)
+- CFG dot file alongside it (`<stem>.cfg.dot`)
+
+### Supported language features
+
+- literals: number, string, character, boolean
+- expressions:
+  - arithmetic: `+ - * / ^`
+  - comparisons: `== != < <= > >=`
+  - ternary: `cond ? a : b`
+  - function calls
+- statements:
+  - `let`
+  - expression statement
+  - `return`
+  - `if / else`
+  - `while`
+  - `for (init; condition; update)`
+- user-defined functions
+- builtin math functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `exp`, `ln`, `log10`, `pow`, `min`, `max`, `sum`
+- builtin IO functions: `print`, `println`, `readln`, `input`
+
+### Interpreter sample run target
+
+```bash
+cmake --build cmake-build-debug --target InterpreterAstTestRun
+```
+
+## Example Targets
+
+Useful ready-to-run custom targets:
+
+- `ExampleLexerRun`
+- `ExampleLR0ParserRun`
+- `ExampleSLRParserRun`
+- `ExampleLR1ParserRun`
+- `ExampleLR1CalculatorRun`
+- `ExampleCalculatorRun`
+- `ExampleCalculatorSampleRun`
+- `ParserAstTestRun`
+- `InterpreterRun`
+- `InterpreterAstTestRun`
