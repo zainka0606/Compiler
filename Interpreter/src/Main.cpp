@@ -1,9 +1,9 @@
 #include "Common/FileIO.h"
 #include "Interpreter.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <iostream>
-#include <algorithm>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -61,73 +61,88 @@ std::vector<std::string> Sorted(std::unordered_set<std::string> values) {
     return out;
 }
 
-std::vector<std::string> SortedKeys(const std::unordered_map<std::string, std::vector<std::string>>& values) {
+std::vector<std::string> SortedKeys(
+    const std::unordered_map<std::string, std::vector<std::string>> &values) {
     std::vector<std::string> out;
     out.reserve(values.size());
-    for (const auto& [key, _] : values) {
+    for (const auto &[key, _] : values) {
         out.push_back(key);
     }
     std::sort(out.begin(), out.end());
     return out;
 }
 
-void PrintAnnotation(const compiler::interpreter::ProgramAnnotation& annotation) {
+void PrintAnnotation(
+    const compiler::interpreter::ProgramAnnotation &annotation) {
     std::cout << "Flattened items:\n";
-    for (const std::string& item : annotation.flattened_items) {
+    for (const std::string &item : annotation.flattened_items) {
         std::cout << "  - " << item << "\n";
     }
 
     std::cout << "Functions:\n";
-    for (const std::string& name : Sorted(annotation.symbols.functions)) {
+    for (const std::string &name : Sorted(annotation.symbols.functions)) {
         std::cout << "  - " << name << "\n";
     }
 
     std::cout << "Globals:\n";
-    for (const std::string& name : Sorted(annotation.symbols.globals)) {
+    for (const std::string &name : Sorted(annotation.symbols.globals)) {
         std::cout << "  - " << name << "\n";
     }
 
     std::cout << "Function params:\n";
-    for (const std::string& name : SortedKeys(annotation.function_parameters)) {
+    for (const std::string &name : SortedKeys(annotation.function_parameters)) {
         std::cout << "  - " << name << ":";
-        for (const std::string& param : annotation.function_parameters.at(name)) {
+        for (const std::string &param :
+             annotation.function_parameters.at(name)) {
             std::cout << " " << param;
         }
         std::cout << "\n";
     }
 
     std::cout << "Function statements:\n";
-    for (const std::string& name : SortedKeys(annotation.function_statements)) {
+    for (const std::string &name : SortedKeys(annotation.function_statements)) {
         std::cout << "  - " << name << ":\n";
-        for (const std::string& stmt : annotation.function_statements.at(name)) {
+        for (const std::string &stmt :
+             annotation.function_statements.at(name)) {
             std::cout << "      * " << stmt << "\n";
         }
     }
 }
 
-int RunFileMode(const std::filesystem::path& input_path, const std::filesystem::path& ast_dot_path) {
+int RunFileMode(const std::filesystem::path &input_path,
+                const std::filesystem::path &ast_dot_path) {
     const std::string source = compiler::common::ReadTextFile(input_path);
-    const compiler::interpreter::AST ast = compiler::interpreter::ParseProgram(source);
-    const compiler::interpreter::ProgramCFG cfg = compiler::interpreter::BuildProgramCFG(ast);
-    const compiler::interpreter::ProgramAnnotation annotation = compiler::interpreter::AnnotateProgram(ast);
-    const compiler::interpreter::Value result = compiler::interpreter::InterpretProgram(ast);
+    const compiler::interpreter::AST ast =
+        compiler::interpreter::ParseProgram(source);
+    const compiler::interpreter::ProgramCFG cfg =
+        compiler::interpreter::BuildProgramCFG(ast);
+    const compiler::interpreter::ProgramAnnotation annotation =
+        compiler::interpreter::AnnotateProgram(ast);
+    const compiler::interpreter::Value result =
+        compiler::interpreter::InterpretProgram(ast);
 
     const std::filesystem::path cfg_dot_path =
-        ast_dot_path.parent_path() / (ast_dot_path.stem().string() + ".cfg.dot");
-    compiler::common::WriteTextFile(ast_dot_path, compiler::interpreter::ASTToGraphvizDot(ast));
-    compiler::common::WriteTextFile(cfg_dot_path, compiler::interpreter::ProgramCFGToGraphvizDot(cfg));
+        ast_dot_path.parent_path() /
+        (ast_dot_path.stem().string() + ".cfg.dot");
+    compiler::common::WriteTextFile(
+        ast_dot_path, compiler::interpreter::ASTToGraphvizDot(ast));
+    compiler::common::WriteTextFile(
+        cfg_dot_path, compiler::interpreter::ProgramCFGToGraphvizDot(cfg));
     std::cout << "Wrote AST DOT to " << ast_dot_path.string() << "\n";
     std::cout << "Wrote CFG DOT to " << cfg_dot_path.string() << "\n";
     PrintAnnotation(annotation);
-    std::cout << "Result: " << compiler::interpreter::ValueToString(result) << "\n";
+    std::cout << "Result: " << compiler::interpreter::ValueToString(result)
+              << "\n";
     return 0;
 }
 
 void PrintHelp() {
     std::cout << "Commands:\n";
-    std::cout << "  <statement-or-decl>   execute snippet (semicolon optional for simple statements)\n";
+    std::cout << "  <statement-or-decl>   execute snippet (semicolon optional "
+                 "for simple statements)\n";
     std::cout << "  :help                 show help\n";
-    std::cout << "  :symbols              show flattened items and symbol table\n";
+    std::cout
+        << "  :symbols              show flattened items and symbol table\n";
     std::cout << "  :reset                clear accumulated program\n";
     std::cout << "  exit|quit             quit\n";
 }
@@ -142,7 +157,8 @@ int RunREPL() {
 
     std::string line;
     while (true) {
-        std::cout << (pending_brace_balance == 0 ? "interp> " : "....> ") << std::flush;
+        std::cout << (pending_brace_balance == 0 ? "interp> " : "....> ")
+                  << std::flush;
         if (!std::getline(std::cin, line)) {
             std::cout << "\n";
             break;
@@ -173,10 +189,12 @@ int RunREPL() {
                     continue;
                 }
                 try {
-                    const compiler::interpreter::AST ast = compiler::interpreter::ParseProgram(committed_source);
-                    const compiler::interpreter::ProgramAnnotation annotation = compiler::interpreter::AnnotateProgram(ast);
+                    const compiler::interpreter::AST ast =
+                        compiler::interpreter::ParseProgram(committed_source);
+                    const compiler::interpreter::ProgramAnnotation annotation =
+                        compiler::interpreter::AnnotateProgram(ast);
                     PrintAnnotation(annotation);
-                } catch (const std::exception& ex) {
+                } catch (const std::exception &ex) {
                     std::cout << "error: " << ex.what() << "\n";
                 }
                 continue;
@@ -214,11 +232,14 @@ int RunREPL() {
         candidate += snippet;
 
         try {
-            const compiler::interpreter::AST ast = compiler::interpreter::ParseProgram(candidate);
-            const compiler::interpreter::Value result = compiler::interpreter::InterpretProgram(ast);
+            const compiler::interpreter::AST ast =
+                compiler::interpreter::ParseProgram(candidate);
+            const compiler::interpreter::Value result =
+                compiler::interpreter::InterpretProgram(ast);
             committed_source = std::move(candidate);
-            std::cout << "= " << compiler::interpreter::ValueToString(result) << "\n";
-        } catch (const std::exception& ex) {
+            std::cout << "= " << compiler::interpreter::ValueToString(result)
+                      << "\n";
+        } catch (const std::exception &ex) {
             std::cout << "error: " << ex.what() << "\n";
         }
     }
@@ -228,11 +249,11 @@ int RunREPL() {
 
 } // namespace
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     if (argc == 1) {
         try {
             return RunREPL();
-        } catch (const std::exception& ex) {
+        } catch (const std::exception &ex) {
             std::cerr << "error: " << ex.what() << "\n";
             return 1;
         }
@@ -245,11 +266,12 @@ int main(int argc, char** argv) {
 
     try {
         const std::filesystem::path input_path = argv[1];
-        const std::filesystem::path output_path = (argc == 3) ? std::filesystem::path(argv[2]) : "AST.dot";
+        const std::filesystem::path output_path =
+            (argc == 3) ? std::filesystem::path(argv[2]) : "AST.dot";
         return RunFileMode(input_path, output_path);
-    } catch (const compiler::interpreter::InterpreterException& ex) {
+    } catch (const compiler::interpreter::InterpreterException &ex) {
         std::cerr << "interpreter error: " << ex.what() << "\n";
-    } catch (const std::exception& ex) {
+    } catch (const std::exception &ex) {
         std::cerr << "error: " << ex.what() << "\n";
     }
 

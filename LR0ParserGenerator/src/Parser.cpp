@@ -265,7 +265,8 @@ std::string ToDebugString(const GrammarSpecAST &spec) {
 std::string GrammarSpecASTToGraphvizDot(const GrammarSpecAST &spec,
                                         std::string_view graph_name) {
     std::ostringstream oss;
-    oss << "digraph " << compiler::common::SanitizeIdentifier(graph_name, "grammar_ast")
+    oss << "digraph "
+        << compiler::common::SanitizeIdentifier(graph_name, "grammar_ast")
         << " {\n";
     oss << "  rankdir=TB;\n";
     oss << "  node [shape=box];\n";

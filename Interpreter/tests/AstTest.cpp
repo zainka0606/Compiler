@@ -17,10 +17,11 @@ std::vector<std::string> Sorted(std::unordered_set<std::string> values) {
     return out;
 }
 
-std::vector<std::string> SortedKeys(const std::unordered_map<std::string, std::vector<std::string>>& values) {
+std::vector<std::string> SortedKeys(
+    const std::unordered_map<std::string, std::vector<std::string>> &values) {
     std::vector<std::string> out;
     out.reserve(values.size());
-    for (const auto& [key, _] : values) {
+    for (const auto &[key, _] : values) {
         out.push_back(key);
     }
     std::sort(out.begin(), out.end());
@@ -29,7 +30,7 @@ std::vector<std::string> SortedKeys(const std::unordered_map<std::string, std::v
 
 } // namespace
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     if (argc != 2 && argc != 3) {
         std::cerr << "usage: InterpreterAstTest <input> [ast-dot-output]\n";
         return 2;
@@ -37,58 +38,72 @@ int main(int argc, char** argv) {
 
     try {
         const std::filesystem::path input_path = argv[1];
-        const std::filesystem::path output_path = (argc == 3) ? std::filesystem::path(argv[2]) : "AST.dot";
+        const std::filesystem::path output_path =
+            (argc == 3) ? std::filesystem::path(argv[2]) : "AST.dot";
         const std::filesystem::path cfg_output_path =
-            output_path.parent_path() / (output_path.stem().string() + ".cfg.dot");
+            output_path.parent_path() /
+            (output_path.stem().string() + ".cfg.dot");
 
         const std::string source = compiler::common::ReadTextFile(input_path);
-        const compiler::interpreter::AST ast = compiler::interpreter::ParseProgram(source);
-        const compiler::interpreter::ProgramCFG cfg = compiler::interpreter::BuildProgramCFG(ast);
-        compiler::common::WriteTextFile(output_path, compiler::interpreter::ASTToGraphvizDot(ast));
-        compiler::common::WriteTextFile(cfg_output_path, compiler::interpreter::ProgramCFGToGraphvizDot(cfg));
+        const compiler::interpreter::AST ast =
+            compiler::interpreter::ParseProgram(source);
+        const compiler::interpreter::ProgramCFG cfg =
+            compiler::interpreter::BuildProgramCFG(ast);
+        compiler::common::WriteTextFile(
+            output_path, compiler::interpreter::ASTToGraphvizDot(ast));
+        compiler::common::WriteTextFile(
+            cfg_output_path,
+            compiler::interpreter::ProgramCFGToGraphvizDot(cfg));
 
-        const compiler::interpreter::ProgramAnnotation annotation = compiler::interpreter::AnnotateProgram(ast);
-        const compiler::interpreter::Value result = compiler::interpreter::InterpretProgram(ast);
+        const compiler::interpreter::ProgramAnnotation annotation =
+            compiler::interpreter::AnnotateProgram(ast);
+        const compiler::interpreter::Value result =
+            compiler::interpreter::InterpretProgram(ast);
 
         std::cout << "Wrote AST DOT to " << output_path.string() << "\n";
         std::cout << "Wrote CFG DOT to " << cfg_output_path.string() << "\n";
         std::cout << "Flattened items:\n";
-        for (const std::string& line : annotation.flattened_items) {
+        for (const std::string &line : annotation.flattened_items) {
             std::cout << "  - " << line << "\n";
         }
 
         std::cout << "Functions:\n";
-        for (const std::string& name : Sorted(annotation.symbols.functions)) {
+        for (const std::string &name : Sorted(annotation.symbols.functions)) {
             std::cout << "  - " << name << "\n";
         }
 
         std::cout << "Globals:\n";
-        for (const std::string& name : Sorted(annotation.symbols.globals)) {
+        for (const std::string &name : Sorted(annotation.symbols.globals)) {
             std::cout << "  - " << name << "\n";
         }
 
         std::cout << "Function params:\n";
-        for (const std::string& name : SortedKeys(annotation.function_parameters)) {
+        for (const std::string &name :
+             SortedKeys(annotation.function_parameters)) {
             std::cout << "  - " << name << ":";
-            for (const std::string& param : annotation.function_parameters.at(name)) {
+            for (const std::string &param :
+                 annotation.function_parameters.at(name)) {
                 std::cout << " " << param;
             }
             std::cout << "\n";
         }
 
         std::cout << "Function statements:\n";
-        for (const std::string& name : SortedKeys(annotation.function_statements)) {
+        for (const std::string &name :
+             SortedKeys(annotation.function_statements)) {
             std::cout << "  - " << name << ":\n";
-            for (const std::string& stmt : annotation.function_statements.at(name)) {
+            for (const std::string &stmt :
+                 annotation.function_statements.at(name)) {
                 std::cout << "      * " << stmt << "\n";
             }
         }
 
-        std::cout << "Result: " << compiler::interpreter::ValueToString(result) << "\n";
+        std::cout << "Result: " << compiler::interpreter::ValueToString(result)
+                  << "\n";
         return 0;
-    } catch (const compiler::interpreter::InterpreterException& ex) {
+    } catch (const compiler::interpreter::InterpreterException &ex) {
         std::cerr << "interpreter error: " << ex.what() << "\n";
-    } catch (const std::exception& ex) {
+    } catch (const std::exception &ex) {
         std::cerr << "error: " << ex.what() << "\n";
     }
 

@@ -12,11 +12,12 @@ namespace compiler::parsergen1 {
 
 namespace {
 
-const LR1Action* FindAction(const LR1ParseTable& table, std::size_t state_index, std::string_view symbol) {
+const LR1Action *FindAction(const LR1ParseTable &table, std::size_t state_index,
+                            std::string_view symbol) {
     if (state_index >= table.action_rows.size()) {
         return nullptr;
     }
-    for (const auto& [entry_symbol, action] : table.action_rows[state_index]) {
+    for (const auto &[entry_symbol, action] : table.action_rows[state_index]) {
         if (entry_symbol == symbol) {
             return &action;
         }
@@ -24,11 +25,12 @@ const LR1Action* FindAction(const LR1ParseTable& table, std::size_t state_index,
     return nullptr;
 }
 
-const std::size_t* FindGoto(const LR1ParseTable& table, std::size_t state_index, std::string_view symbol) {
+const std::size_t *FindGoto(const LR1ParseTable &table, std::size_t state_index,
+                            std::string_view symbol) {
     if (state_index >= table.goto_rows.size()) {
         return nullptr;
     }
-    for (const auto& [entry_symbol, target] : table.goto_rows[state_index]) {
+    for (const auto &[entry_symbol, target] : table.goto_rows[state_index]) {
         if (entry_symbol == symbol) {
             return &target;
         }
@@ -36,7 +38,8 @@ const std::size_t* FindGoto(const LR1ParseTable& table, std::size_t state_index,
     return nullptr;
 }
 
-std::size_t EmitGraphvizNode(const CSTNode& node, std::ostringstream& out, std::size_t& next_id) {
+std::size_t EmitGraphvizNode(const CSTNode &node, std::ostringstream &out,
+                             std::size_t &next_id) {
     const std::size_t id = next_id++;
 
     std::string label(node.Symbol());
@@ -44,9 +47,10 @@ std::size_t EmitGraphvizNode(const CSTNode& node, std::ostringstream& out, std::
         label.push_back('\n');
         label += std::string(node.Lexeme());
     }
-    out << "  n" << id << " [label=\"" << compiler::common::EscapeGraphvizLabel(label) << "\"];\n";
+    out << "  n" << id << " [label=\""
+        << compiler::common::EscapeGraphvizLabel(label) << "\"];\n";
 
-    for (const std::unique_ptr<CSTNode>& child : node.Children()) {
+    for (const std::unique_ptr<CSTNode> &child : node.Children()) {
         const std::size_t child_id = EmitGraphvizNode(*child, out, next_id);
         out << "  n" << id << " -> n" << child_id << ";\n";
     }
@@ -56,11 +60,9 @@ std::size_t EmitGraphvizNode(const CSTNode& node, std::ostringstream& out, std::
 
 } // namespace
 
-std::string_view CSTNode::Lexeme() const {
-    return {};
-}
+std::string_view CSTNode::Lexeme() const { return {}; }
 
-const std::vector<std::unique_ptr<CSTNode>>& CSTNode::Children() const {
+const std::vector<std::unique_ptr<CSTNode>> &CSTNode::Children() const {
     static const std::vector<std::unique_ptr<CSTNode>> kEmpty;
     return kEmpty;
 }
@@ -77,76 +79,51 @@ std::size_t CSTNode::SourceAlternativeIndex() const {
     return compiler::lr1::kInvalidIndex;
 }
 
-std::size_t CSTNode::ChildCount() const {
-    return Children().size();
-}
+std::size_t CSTNode::ChildCount() const { return Children().size(); }
 
-const CSTNode& CSTNode::Child(std::size_t index) const {
-    const auto& children = Children();
+const CSTNode &CSTNode::Child(std::size_t index) const {
+    const auto &children = Children();
     if (index >= children.size() || children[index] == nullptr) {
         throw std::out_of_range("CST child index out of range");
     }
     return *children[index];
 }
 
-CSTTerminalNode::CSTTerminalNode(std::string symbol,
-                                 std::string lexeme,
-                                 std::size_t line,
-                                 std::size_t column)
-    : symbol_(std::move(symbol)), lexeme_(std::move(lexeme)), line_(line), column_(column) {}
+CSTTerminalNode::CSTTerminalNode(std::string symbol, std::string lexeme,
+                                 std::size_t line, std::size_t column)
+    : symbol_(std::move(symbol)), lexeme_(std::move(lexeme)), line_(line),
+      column_(column) {}
 
-std::string_view CSTTerminalNode::Symbol() const {
-    return symbol_;
-}
+std::string_view CSTTerminalNode::Symbol() const { return symbol_; }
 
-bool CSTTerminalNode::IsTerminal() const {
-    return true;
-}
+bool CSTTerminalNode::IsTerminal() const { return true; }
 
-std::string_view CSTTerminalNode::Lexeme() const {
-    return lexeme_;
-}
+std::string_view CSTTerminalNode::Lexeme() const { return lexeme_; }
 
-std::size_t CSTTerminalNode::Line() const {
-    return line_;
-}
+std::size_t CSTTerminalNode::Line() const { return line_; }
 
-std::size_t CSTTerminalNode::Column() const {
-    return column_;
-}
+std::size_t CSTTerminalNode::Column() const { return column_; }
 
-CSTNonterminalNode::CSTNonterminalNode(std::string symbol,
-                                       std::size_t line,
-                                       std::size_t column,
-                                       std::vector<std::unique_ptr<CSTNode>> children,
-                                       std::size_t production_index,
-                                       std::size_t source_rule_index,
-                                       std::size_t source_alternative_index)
-    : symbol_(std::move(symbol)),
-      line_(line),
-      column_(column),
-      children_(std::move(children)),
-      production_index_(production_index),
+CSTNonterminalNode::CSTNonterminalNode(
+    std::string symbol, std::size_t line, std::size_t column,
+    std::vector<std::unique_ptr<CSTNode>> children,
+    std::size_t production_index, std::size_t source_rule_index,
+    std::size_t source_alternative_index)
+    : symbol_(std::move(symbol)), line_(line), column_(column),
+      children_(std::move(children)), production_index_(production_index),
       source_rule_index_(source_rule_index),
       source_alternative_index_(source_alternative_index) {}
 
-std::string_view CSTNonterminalNode::Symbol() const {
-    return symbol_;
-}
+std::string_view CSTNonterminalNode::Symbol() const { return symbol_; }
 
-bool CSTNonterminalNode::IsTerminal() const {
-    return false;
-}
+bool CSTNonterminalNode::IsTerminal() const { return false; }
 
-std::size_t CSTNonterminalNode::Line() const {
-    return line_;
-}
+std::size_t CSTNonterminalNode::Line() const { return line_; }
 
-std::size_t CSTNonterminalNode::Column() const {
-    return column_;
-}
+std::size_t CSTNonterminalNode::Column() const { return column_; }
 
-const std::vector<std::unique_ptr<CSTNode>>& CSTNonterminalNode::Children() const {
+const std::vector<std::unique_ptr<CSTNode>> &
+CSTNonterminalNode::Children() const {
     return children_;
 }
 
@@ -162,27 +139,27 @@ std::size_t CSTNonterminalNode::SourceAlternativeIndex() const {
     return source_alternative_index_;
 }
 
-bool CST::Empty() const {
-    return root == nullptr;
-}
+bool CST::Empty() const { return root == nullptr; }
 
-const CSTNode& CST::Root() const {
+const CSTNode &CST::Root() const {
     if (root == nullptr) {
         throw CSTParseException("CST root is empty");
     }
     return *root;
 }
 
-CSTNode& CST::Root() {
+CSTNode &CST::Root() {
     if (root == nullptr) {
         throw CSTParseException("CST root is empty");
     }
     return *root;
 }
 
-CST ParseTokensToCST(const LR1ParseTable& table, const std::vector<GenericToken>& tokens) {
+CST ParseTokensToCST(const LR1ParseTable &table,
+                     const std::vector<GenericToken> &tokens) {
     if (!table.conflicts.empty()) {
-        throw CSTParseException("cannot parse with conflicting LR(1) table (" + std::to_string(table.conflicts.size()) +
+        throw CSTParseException("cannot parse with conflicting LR(1) table (" +
+                                std::to_string(table.conflicts.size()) +
                                 " conflict(s))");
     }
     if (table.canonical_collection.states.empty()) {
@@ -199,19 +176,21 @@ CST ParseTokensToCST(const LR1ParseTable& table, const std::vector<GenericToken>
 
     while (true) {
         if (token_index >= tokens.size()) {
-            throw CSTParseException("token stream ended before parser accepted");
+            throw CSTParseException(
+                "token stream ended before parser accepted");
         }
         if (++step_count > 500000) {
             throw CSTParseException("parser exceeded step limit");
         }
 
-        const GenericToken& token = tokens[token_index];
+        const GenericToken &token = tokens[token_index];
         const std::string_view symbol = token.kind;
         const std::size_t state = state_stack.back();
-        const LR1Action* action = FindAction(table, state, symbol);
+        const LR1Action *action = FindAction(table, state, symbol);
         if (action == nullptr) {
             std::ostringstream oss;
-            oss << "no ACTION entry for state " << state << " and symbol '" << symbol << "'";
+            oss << "no ACTION entry for state " << state << " and symbol '"
+                << symbol << "'";
             if (!token.lexeme.empty()) {
                 oss << " (" << token.lexeme << ")";
             }
@@ -220,76 +199,86 @@ CST ParseTokensToCST(const LR1ParseTable& table, const std::vector<GenericToken>
         }
 
         switch (action->kind) {
-            case LR1ActionKind::Shift: {
-                if (action->target_state == kInvalidIndex) {
-                    throw CSTParseException("invalid shift target");
-                }
-                node_stack.push_back(std::make_unique<CSTTerminalNode>(token.kind, token.lexeme, token.line, token.column));
-                state_stack.push_back(action->target_state);
-                ++token_index;
-                break;
+        case LR1ActionKind::Shift: {
+            if (action->target_state == kInvalidIndex) {
+                throw CSTParseException("invalid shift target");
+            }
+            node_stack.push_back(std::make_unique<CSTTerminalNode>(
+                token.kind, token.lexeme, token.line, token.column));
+            state_stack.push_back(action->target_state);
+            ++token_index;
+            break;
+        }
+
+        case LR1ActionKind::Reduce: {
+            if (action->production_index >=
+                table.canonical_collection.productions.size()) {
+                throw CSTParseException("invalid reduce production index");
+            }
+            const FlattenedProduction &production =
+                table.canonical_collection
+                    .productions[action->production_index];
+            if (production.is_augmented) {
+                throw CSTParseException(
+                    "unexpected reduction by augmented production");
             }
 
-            case LR1ActionKind::Reduce: {
-                if (action->production_index >= table.canonical_collection.productions.size()) {
-                    throw CSTParseException("invalid reduce production index");
-                }
-                const FlattenedProduction& production = table.canonical_collection.productions[action->production_index];
-                if (production.is_augmented) {
-                    throw CSTParseException("unexpected reduction by augmented production");
-                }
-
-                const std::size_t pop_count = production.rhs.size();
-                if (node_stack.size() < pop_count || state_stack.size() < (pop_count + 1)) {
-                    throw CSTParseException("parser stack underflow during reduction");
-                }
-
-                std::vector<std::unique_ptr<CSTNode>> children;
-                children.reserve(pop_count);
-                auto child_begin = node_stack.end() - static_cast<std::ptrdiff_t>(pop_count);
-                for (auto it = child_begin; it != node_stack.end(); ++it) {
-                    children.push_back(std::move(*it));
-                }
-                node_stack.resize(node_stack.size() - pop_count);
-                state_stack.resize(state_stack.size() - pop_count);
-
-                const std::size_t line = children.empty() ? token.line : children.front()->Line();
-                const std::size_t column = children.empty() ? token.column : children.front()->Column();
-                node_stack.push_back(std::make_unique<CSTNonterminalNode>(production.lhs,
-                                                                          line,
-                                                                          column,
-                                                                          std::move(children),
-                                                                          action->production_index,
-                                                                          production.source_rule_index,
-                                                                          production.source_alternative_index));
-
-                const std::size_t goto_state_source = state_stack.back();
-                const std::size_t* goto_state = FindGoto(table, goto_state_source, production.lhs);
-                if (goto_state == nullptr) {
-                    throw CSTParseException("no GOTO entry for state " + std::to_string(goto_state_source) +
-                                            " and nonterminal '" + production.lhs + "'");
-                }
-
-                state_stack.push_back(*goto_state);
-                break;
+            const std::size_t pop_count = production.rhs.size();
+            if (node_stack.size() < pop_count ||
+                state_stack.size() < (pop_count + 1)) {
+                throw CSTParseException(
+                    "parser stack underflow during reduction");
             }
 
-            case LR1ActionKind::Accept: {
-                if (token.kind != table.canonical_collection.end_marker) {
-                    throw CSTParseException("parser accepted before end of input");
-                }
-                if (node_stack.empty()) {
-                    throw CSTParseException("parser accepted with empty CST stack");
-                }
-                cst.root = std::move(node_stack.back());
-                node_stack.pop_back();
-                return cst;
+            std::vector<std::unique_ptr<CSTNode>> children;
+            children.reserve(pop_count);
+            auto child_begin =
+                node_stack.end() - static_cast<std::ptrdiff_t>(pop_count);
+            for (auto it = child_begin; it != node_stack.end(); ++it) {
+                children.push_back(std::move(*it));
             }
+            node_stack.resize(node_stack.size() - pop_count);
+            state_stack.resize(state_stack.size() - pop_count);
+
+            const std::size_t line =
+                children.empty() ? token.line : children.front()->Line();
+            const std::size_t column =
+                children.empty() ? token.column : children.front()->Column();
+            node_stack.push_back(std::make_unique<CSTNonterminalNode>(
+                production.lhs, line, column, std::move(children),
+                action->production_index, production.source_rule_index,
+                production.source_alternative_index));
+
+            const std::size_t goto_state_source = state_stack.back();
+            const std::size_t *goto_state =
+                FindGoto(table, goto_state_source, production.lhs);
+            if (goto_state == nullptr) {
+                throw CSTParseException("no GOTO entry for state " +
+                                        std::to_string(goto_state_source) +
+                                        " and nonterminal '" + production.lhs +
+                                        "'");
+            }
+
+            state_stack.push_back(*goto_state);
+            break;
+        }
+
+        case LR1ActionKind::Accept: {
+            if (token.kind != table.canonical_collection.end_marker) {
+                throw CSTParseException("parser accepted before end of input");
+            }
+            if (node_stack.empty()) {
+                throw CSTParseException("parser accepted with empty CST stack");
+            }
+            cst.root = std::move(node_stack.back());
+            node_stack.pop_back();
+            return cst;
+        }
         }
     }
 }
 
-std::string CSTToGraphvizDot(const CST& cst, std::string_view graph_name) {
+std::string CSTToGraphvizDot(const CST &cst, std::string_view graph_name) {
     if (cst.Empty()) {
         throw CSTParseException("cannot render empty CST");
     }
@@ -307,34 +296,41 @@ std::string CSTToGraphvizDot(const CST& cst, std::string_view graph_name) {
     return out.str();
 }
 
-const FlattenedProduction* TryGetCSTReductionProduction(const LR1ParseTable& table, const CSTNode& node) {
+const FlattenedProduction *
+TryGetCSTReductionProduction(const LR1ParseTable &table, const CSTNode &node) {
     if (node.IsTerminal() || node.ProductionIndex() == kInvalidIndex) {
         return nullptr;
     }
-    if (node.ProductionIndex() >= table.canonical_collection.productions.size()) {
+    if (node.ProductionIndex() >=
+        table.canonical_collection.productions.size()) {
         return nullptr;
     }
-    const FlattenedProduction& production = table.canonical_collection.productions[node.ProductionIndex()];
+    const FlattenedProduction &production =
+        table.canonical_collection.productions[node.ProductionIndex()];
     if (production.is_augmented) {
         return nullptr;
     }
     return &production;
 }
 
-const FlattenedProduction& GetCSTReductionProduction(const LR1ParseTable& table, const CSTNode& node) {
-    const FlattenedProduction* production = TryGetCSTReductionProduction(table, node);
+const FlattenedProduction &GetCSTReductionProduction(const LR1ParseTable &table,
+                                                     const CSTNode &node) {
+    const FlattenedProduction *production =
+        TryGetCSTReductionProduction(table, node);
     if (production == nullptr) {
-        throw CSTParseException("CST node is not a valid nonterminal reduction node");
+        throw CSTParseException(
+            "CST node is not a valid nonterminal reduction node");
     }
     return *production;
 }
 
-bool CSTNodeMatchesProduction(const LR1ParseTable& table,
-                              const CSTNode& node,
+bool CSTNodeMatchesProduction(const LR1ParseTable &table, const CSTNode &node,
                               std::string_view lhs,
                               std::initializer_list<std::string_view> rhs) {
-    const FlattenedProduction* production = TryGetCSTReductionProduction(table, node);
-    if (production == nullptr || production->lhs != lhs || production->rhs.size() != rhs.size()) {
+    const FlattenedProduction *production =
+        TryGetCSTReductionProduction(table, node);
+    if (production == nullptr || production->lhs != lhs ||
+        production->rhs.size() != rhs.size()) {
         return false;
     }
     std::size_t i = 0;

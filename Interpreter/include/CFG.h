@@ -33,7 +33,9 @@ struct ProgramCFG {
     std::vector<CFGGraph> functions;
 };
 
-ProgramCFG BuildProgramCFG(const AST& ast);
-std::string ProgramCFGToGraphvizDot(const ProgramCFG& cfg, std::string_view graph_name = "program_cfg");
+ProgramCFG BuildProgramCFG(const AST &ast);
+std::string
+ProgramCFGToGraphvizDot(const ProgramCFG &cfg,
+                        std::string_view graph_name = "program_cfg");
 
 } // namespace compiler::interpreter

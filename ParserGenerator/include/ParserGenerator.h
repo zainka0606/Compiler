@@ -26,18 +26,19 @@ using CSTParseException = compiler::parsergen1::CSTParseException;
 using ProductionRule = compiler::parsergen1::ProductionRule;
 using ProductionAlternative = compiler::parsergen1::ProductionAlternative;
 
-inline constexpr std::size_t kInvalidIndex = compiler::parsergen1::kInvalidIndex;
+inline constexpr std::size_t kInvalidIndex =
+    compiler::parsergen1::kInvalidIndex;
 
-using compiler::parsergen1::ParseGrammarSpec;
 using compiler::parsergen1::BuildLR1CanonicalCollection;
 using compiler::parsergen1::BuildLR1ParseTable;
 using compiler::parsergen1::BuildLR1ParseTableFromGrammarSpec;
-using compiler::parsergen1::GrammarSpecASTToGraphvizDot;
-using compiler::parsergen1::ParseTokensToCST;
-using compiler::parsergen1::CSTToGraphvizDot;
-using compiler::parsergen1::TryGetCSTReductionProduction;
-using compiler::parsergen1::GetCSTReductionProduction;
 using compiler::parsergen1::CSTNodeMatchesProduction;
+using compiler::parsergen1::CSTToGraphvizDot;
+using compiler::parsergen1::GetCSTReductionProduction;
+using compiler::parsergen1::GrammarSpecASTToGraphvizDot;
+using compiler::parsergen1::ParseGrammarSpec;
+using compiler::parsergen1::ParseTokensToCST;
+using compiler::parsergen1::TryGetCSTReductionProduction;
 
 struct ASTNodeTypeDecl {
     std::string name;
@@ -123,11 +124,13 @@ class GeneratedASTNode {
     virtual ~GeneratedASTNode() = default;
 
     [[nodiscard]] virtual std::string_view KindName() const = 0;
-    [[nodiscard]] virtual const std::vector<GeneratedASTNodeChildField>& ChildFields() const = 0;
-    [[nodiscard]] virtual const std::vector<GeneratedASTNodeTextField>& TextFields() const = 0;
+    [[nodiscard]] virtual const std::vector<GeneratedASTNodeChildField> &
+    ChildFields() const = 0;
+    [[nodiscard]] virtual const std::vector<GeneratedASTNodeTextField> &
+    TextFields() const = 0;
 
     [[nodiscard]] std::size_t ChildCount() const;
-    [[nodiscard]] const GeneratedASTNode& Child(std::size_t index) const;
+    [[nodiscard]] const GeneratedASTNode &Child(std::size_t index) const;
 };
 
 class GeneratedCustomASTNode final : public GeneratedASTNode {
@@ -137,8 +140,10 @@ class GeneratedCustomASTNode final : public GeneratedASTNode {
                            std::vector<GeneratedASTNodeTextField> text_fields);
 
     [[nodiscard]] std::string_view KindName() const override;
-    [[nodiscard]] const std::vector<GeneratedASTNodeChildField>& ChildFields() const override;
-    [[nodiscard]] const std::vector<GeneratedASTNodeTextField>& TextFields() const override;
+    [[nodiscard]] const std::vector<GeneratedASTNodeChildField> &
+    ChildFields() const override;
+    [[nodiscard]] const std::vector<GeneratedASTNodeTextField> &
+    TextFields() const override;
 
   private:
     std::string kind_name_;
@@ -150,45 +155,48 @@ struct GeneratedAST {
     std::unique_ptr<GeneratedASTNode> root;
 
     GeneratedAST() = default;
-    GeneratedAST(GeneratedAST&&) noexcept = default;
-    GeneratedAST& operator=(GeneratedAST&&) noexcept = default;
-    GeneratedAST(const GeneratedAST&) = delete;
-    GeneratedAST& operator=(const GeneratedAST&) = delete;
+    GeneratedAST(GeneratedAST &&) noexcept = default;
+    GeneratedAST &operator=(GeneratedAST &&) noexcept = default;
+    GeneratedAST(const GeneratedAST &) = delete;
+    GeneratedAST &operator=(const GeneratedAST &) = delete;
 
     [[nodiscard]] bool Empty() const;
-    [[nodiscard]] const GeneratedASTNode& Root() const;
-    [[nodiscard]] GeneratedASTNode& Root();
+    [[nodiscard]] const GeneratedASTNode &Root() const;
+    [[nodiscard]] GeneratedASTNode &Root();
 };
 
 Stage2SpecAST ParseStage2Spec(std::string_view source_text);
-void ValidateStage2Spec(const Stage2SpecAST& spec);
-GrammarSpecAST ToBaseGrammarSpec(const Stage2SpecAST& spec);
-LR1CanonicalCollection BuildLR1CanonicalCollection(const Stage2SpecAST& spec);
-LR1ParseTable BuildLR1ParseTable(const Stage2SpecAST& spec);
+void ValidateStage2Spec(const Stage2SpecAST &spec);
+GrammarSpecAST ToBaseGrammarSpec(const Stage2SpecAST &spec);
+LR1CanonicalCollection BuildLR1CanonicalCollection(const Stage2SpecAST &spec);
+LR1ParseTable BuildLR1ParseTable(const Stage2SpecAST &spec);
 LR1ParseTable BuildLR1ParseTableFromStage2Spec(std::string_view source_text);
 
-std::string Stage2SpecASTToGraphvizDot(const Stage2SpecAST& spec,
-                                       std::string_view graph_name = "parser_generator_stage2_spec_ast");
-std::string LR1CanonicalCollectionToGraphvizDot(const LR1CanonicalCollection& collection,
-                                                std::string_view graph_name = "lr1_canonical_collection");
-std::string LR1ParseTableToGraphvizDot(const LR1ParseTable& table,
-                                       std::string_view graph_name = "lr1_parse_table");
+std::string Stage2SpecASTToGraphvizDot(
+    const Stage2SpecAST &spec,
+    std::string_view graph_name = "parser_generator_stage2_spec_ast");
+std::string LR1CanonicalCollectionToGraphvizDot(
+    const LR1CanonicalCollection &collection,
+    std::string_view graph_name = "lr1_canonical_collection");
+std::string
+LR1ParseTableToGraphvizDot(const LR1ParseTable &table,
+                           std::string_view graph_name = "lr1_parse_table");
 
-GeneratedAST BuildGeneratedASTFromCST(const CST& cst,
-                                      const LR1ParseTable& parse_table,
-                                      const Stage2SpecAST& spec);
-std::string GeneratedASTToGraphvizDot(const GeneratedAST& ast,
+GeneratedAST BuildGeneratedASTFromCST(const CST &cst,
+                                      const LR1ParseTable &parse_table,
+                                      const Stage2SpecAST &spec);
+std::string GeneratedASTToGraphvizDot(const GeneratedAST &ast,
                                       std::string_view graph_name = "ast");
 
-GeneratedParserFiles GenerateCppParser(const Stage2SpecAST& spec,
+GeneratedParserFiles GenerateCppParser(const Stage2SpecAST &spec,
                                        std::string_view stage2_spec_source,
                                        std::string_view header_filename = {},
                                        std::string_view source_filename = {});
 
-int RunParserGeneratorCLI(int argc, const char* const* argv);
+int RunParserGeneratorCLI(int argc, const char *const *argv);
 
 // Transitional alias while renaming ParserGeneratorStage2 -> ParserGenerator.
-inline int RunParserGeneratorStage2CLI(int argc, const char* const* argv) {
+inline int RunParserGeneratorStage2CLI(int argc, const char *const *argv) {
     return RunParserGeneratorCLI(argc, argv);
 }
 

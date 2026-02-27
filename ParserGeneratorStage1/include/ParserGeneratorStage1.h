@@ -34,22 +34,25 @@ struct GeneratedParserFiles {
 };
 
 GrammarSpecAST ParseGrammarSpec(std::string_view source_text);
-LR1CanonicalCollection BuildLR1CanonicalCollection(const GrammarSpecAST& spec);
-LR1ParseTable BuildLR1ParseTable(const GrammarSpecAST& spec);
+LR1CanonicalCollection BuildLR1CanonicalCollection(const GrammarSpecAST &spec);
+LR1ParseTable BuildLR1ParseTable(const GrammarSpecAST &spec);
 LR1ParseTable BuildLR1ParseTableFromGrammarSpec(std::string_view source_text);
 
-std::string GrammarSpecASTToGraphvizDot(const GrammarSpecAST& spec,
-                                        std::string_view graph_name = "grammar_ast");
-std::string LR1CanonicalCollectionToGraphvizDot(const LR1CanonicalCollection& collection,
-                                                std::string_view graph_name = "lr1_canonical_collection");
-std::string LR1ParseTableToGraphvizDot(const LR1ParseTable& table,
-                                       std::string_view graph_name = "lr1_parse_table");
+std::string
+GrammarSpecASTToGraphvizDot(const GrammarSpecAST &spec,
+                            std::string_view graph_name = "grammar_ast");
+std::string LR1CanonicalCollectionToGraphvizDot(
+    const LR1CanonicalCollection &collection,
+    std::string_view graph_name = "lr1_canonical_collection");
+std::string
+LR1ParseTableToGraphvizDot(const LR1ParseTable &table,
+                           std::string_view graph_name = "lr1_parse_table");
 
-GeneratedParserFiles GenerateCppParser(const GrammarSpecAST& spec,
+GeneratedParserFiles GenerateCppParser(const GrammarSpecAST &spec,
                                        std::string_view grammar_spec_source,
                                        std::string_view header_filename = {},
                                        std::string_view source_filename = {});
 
-int RunParserGeneratorCLI(int argc, const char* const* argv);
+int RunParserGeneratorCLI(int argc, const char *const *argv);
 
 } // namespace compiler::parsergen1

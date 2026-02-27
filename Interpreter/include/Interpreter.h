@@ -26,17 +26,19 @@ struct SymbolTable {
 struct ProgramAnnotation {
     std::vector<std::string> flattened_items;
     SymbolTable symbols;
-    std::unordered_map<std::string, std::vector<std::string>> function_parameters;
-    std::unordered_map<std::string, std::vector<std::string>> function_statements;
+    std::unordered_map<std::string, std::vector<std::string>>
+        function_parameters;
+    std::unordered_map<std::string, std::vector<std::string>>
+        function_statements;
 };
 
 using Value = std::variant<std::monostate, double, std::string, bool, char>;
 
-std::string ValueToString(const Value& value);
+std::string ValueToString(const Value &value);
 
 AST ParseProgram(std::string_view source_text);
-ProgramAnnotation AnnotateProgram(const AST& ast);
-Value InterpretProgram(const AST& ast);
+ProgramAnnotation AnnotateProgram(const AST &ast);
+Value InterpretProgram(const AST &ast);
 Value InterpretSource(std::string_view source_text);
 
 } // namespace compiler::interpreter

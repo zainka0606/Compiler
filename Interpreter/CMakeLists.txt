@@ -21,46 +21,46 @@ set(INTERPRETER_LEXER_GENERATED_HEADER "${INTERPRETER_LEXER_GENERATED_DIR}/Langu
 set(INTERPRETER_LEXER_GENERATED_SOURCE "${INTERPRETER_LEXER_GENERATED_DIR}/LanguageLexer.cpp")
 
 compiler_add_copy_file_command(
-    OUTPUT "${INTERPRETER_INPUT_BUILD}"
-    SOURCE "${INTERPRETER_INPUT_SOURCE}"
-    COMMENT "Copying Interpreter input file"
+        OUTPUT "${INTERPRETER_INPUT_BUILD}"
+        SOURCE "${INTERPRETER_INPUT_SOURCE}"
+        COMMENT "Copying Interpreter input file"
 )
 
 compiler_add_lexer_generator_command(
-    SPEC_SOURCE "${INTERPRETER_LEXER_SPEC_SOURCE}"
-    SPEC_BUILD "${INTERPRETER_LEXER_SPEC_BUILD}"
-    OUTPUT_HEADER "${INTERPRETER_LEXER_GENERATED_HEADER}"
-    OUTPUT_SOURCE "${INTERPRETER_LEXER_GENERATED_SOURCE}"
-    COMMENT "Generating Interpreter language lexer from LanguageLexer.lex"
+        SPEC_SOURCE "${INTERPRETER_LEXER_SPEC_SOURCE}"
+        SPEC_BUILD "${INTERPRETER_LEXER_SPEC_BUILD}"
+        OUTPUT_HEADER "${INTERPRETER_LEXER_GENERATED_HEADER}"
+        OUTPUT_SOURCE "${INTERPRETER_LEXER_GENERATED_SOURCE}"
+        COMMENT "Generating Interpreter language lexer from LanguageLexer.lex"
 )
 
 compiler_add_parser_generator_command(
-    SPEC_SOURCE "${INTERPRETER_GRAMMAR_SPEC_SOURCE}"
-    SPEC_BUILD "${INTERPRETER_GRAMMAR_SPEC_BUILD}"
-    OUTPUT_HEADER "${INTERPRETER_GENERATED_PARSER_HEADER}"
-    OUTPUT_SOURCE "${INTERPRETER_GENERATED_PARSER_SOURCE}"
-    OUTPUT_AST "${INTERPRETER_GRAMMAR_AST_DOT}"
-    OUTPUT_COLLECTION "${INTERPRETER_GRAMMAR_COLLECTION_DOT}"
-    OUTPUT_TABLE "${INTERPRETER_GRAMMAR_TABLE_DOT}"
-    EXTRA_ARGS
+        SPEC_SOURCE "${INTERPRETER_GRAMMAR_SPEC_SOURCE}"
+        SPEC_BUILD "${INTERPRETER_GRAMMAR_SPEC_BUILD}"
+        OUTPUT_HEADER "${INTERPRETER_GENERATED_PARSER_HEADER}"
+        OUTPUT_SOURCE "${INTERPRETER_GENERATED_PARSER_SOURCE}"
+        OUTPUT_AST "${INTERPRETER_GRAMMAR_AST_DOT}"
+        OUTPUT_COLLECTION "${INTERPRETER_GRAMMAR_COLLECTION_DOT}"
+        OUTPUT_TABLE "${INTERPRETER_GRAMMAR_TABLE_DOT}"
+        EXTRA_ARGS
         --header "GeneratedParser.h"
         --source "GeneratedParser.cpp"
-    COMMENT "Generating Interpreter parser and Graphviz dumps from Language.pg"
+        COMMENT "Generating Interpreter parser and Graphviz dumps from Language.pg"
 )
 
 set_source_files_properties(
-    "${INTERPRETER_GRAMMAR_AST_DOT}"
-    "${INTERPRETER_GRAMMAR_COLLECTION_DOT}"
-    "${INTERPRETER_GRAMMAR_TABLE_DOT}"
-    "${INTERPRETER_GENERATED_PARSER_HEADER}"
-    "${INTERPRETER_GENERATED_PARSER_SOURCE}"
-    "${INTERPRETER_LEXER_GENERATED_HEADER}"
-    "${INTERPRETER_LEXER_GENERATED_SOURCE}"
-    PROPERTIES GENERATED TRUE
+        "${INTERPRETER_GRAMMAR_AST_DOT}"
+        "${INTERPRETER_GRAMMAR_COLLECTION_DOT}"
+        "${INTERPRETER_GRAMMAR_TABLE_DOT}"
+        "${INTERPRETER_GENERATED_PARSER_HEADER}"
+        "${INTERPRETER_GENERATED_PARSER_SOURCE}"
+        "${INTERPRETER_LEXER_GENERATED_HEADER}"
+        "${INTERPRETER_LEXER_GENERATED_SOURCE}"
+        PROPERTIES GENERATED TRUE
 )
 
 add_custom_target(InterpreterCodegen
-    DEPENDS
+        DEPENDS
         "${INTERPRETER_GENERATED_PARSER_HEADER}"
         "${INTERPRETER_GENERATED_PARSER_SOURCE}"
         "${INTERPRETER_GRAMMAR_AST_DOT}"
@@ -69,40 +69,40 @@ add_custom_target(InterpreterCodegen
 )
 
 add_custom_target(InterpreterInput
-    DEPENDS
+        DEPENDS
         "${INTERPRETER_INPUT_BUILD}"
 )
 
 add_custom_target(InterpreterLexerCodegen
-    DEPENDS
+        DEPENDS
         "${INTERPRETER_LEXER_GENERATED_HEADER}"
         "${INTERPRETER_LEXER_GENERATED_SOURCE}"
 )
 
 add_library(Interpreter
-    src/CFG.cpp
-    src/Interpreter.cpp
-    "${INTERPRETER_GENERATED_PARSER_SOURCE}"
-    "${INTERPRETER_LEXER_GENERATED_SOURCE}"
+        src/CFG.cpp
+        src/Interpreter.cpp
+        "${INTERPRETER_GENERATED_PARSER_SOURCE}"
+        "${INTERPRETER_LEXER_GENERATED_SOURCE}"
 )
 
 add_dependencies(Interpreter
-    InterpreterCodegen
-    InterpreterLexerCodegen
+        InterpreterCodegen
+        InterpreterLexerCodegen
 )
 
 target_include_directories(Interpreter
-    PUBLIC
+        PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
         "${INTERPRETER_GRAMMAR_OUTPUT_DIR}"
-    PRIVATE
+        PRIVATE
         "${INTERPRETER_LEXER_GENERATED_DIR}"
 )
 
 target_link_libraries(Interpreter
-    PUBLIC
+        PUBLIC
         ParserGenerator
-    PRIVATE
+        PRIVATE
         Common
 )
 
@@ -110,47 +110,47 @@ add_library(compiler::Interpreter ALIAS Interpreter)
 add_library(compiler::interpreter ALIAS Interpreter)
 
 add_executable(InterpreterExe
-    src/Main.cpp
+        src/Main.cpp
 )
 
 set_target_properties(InterpreterExe PROPERTIES OUTPUT_NAME Interpreter)
 
 target_link_libraries(InterpreterExe
-    PRIVATE
+        PRIVATE
         Interpreter
         Common
 )
 
 add_custom_target(InterpreterRun
-    COMMAND "$<TARGET_FILE:InterpreterExe>"
-    DEPENDS
+        COMMAND "$<TARGET_FILE:InterpreterExe>"
+        DEPENDS
         InterpreterExe
         InterpreterCodegen
         InterpreterLexerCodegen
-    USES_TERMINAL
-    VERBATIM
+        USES_TERMINAL
+        VERBATIM
 )
 
 add_executable(InterpreterAstTestExe
-    tests/AstTest.cpp
+        tests/AstTest.cpp
 )
 
 set_target_properties(InterpreterAstTestExe PROPERTIES OUTPUT_NAME InterpreterAstTest)
 
 target_link_libraries(InterpreterAstTestExe
-    PRIVATE
+        PRIVATE
         Interpreter
         Common
 )
 
 add_custom_target(InterpreterAstTestRun
-    COMMAND "$<TARGET_FILE:InterpreterAstTestExe>"
+        COMMAND "$<TARGET_FILE:InterpreterAstTestExe>"
         "${INTERPRETER_INPUT_BUILD}"
         "${INTERPRETER_RUNTIME_AST_DOT}"
-    DEPENDS
+        DEPENDS
         InterpreterAstTestExe
         InterpreterCodegen
         InterpreterInput
-    USES_TERMINAL
-    VERBATIM
+        USES_TERMINAL
+        VERBATIM
 )

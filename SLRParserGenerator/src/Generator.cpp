@@ -702,7 +702,9 @@ SLRCanonicalCollectionToGraphvizDot(const SLRCanonicalCollection &collection,
                                     std::string_view graph_name) {
     std::ostringstream oss;
     oss << "digraph "
-        << compiler::common::SanitizeIdentifier(graph_name, "slr_canonical_collection") << " {\n";
+        << compiler::common::SanitizeIdentifier(graph_name,
+                                                "slr_canonical_collection")
+        << " {\n";
     oss << "  rankdir=LR;\n";
     oss << "  node [shape=box, fontname=\"monospace\"];\n";
     oss << "  __start [shape=point];\n";
@@ -748,7 +750,8 @@ SLRCanonicalCollectionToGraphvizDot(const SLRCanonicalCollection &collection,
 std::string SLRParseTableToGraphvizDot(const SLRParseTable &table,
                                        std::string_view graph_name) {
     std::ostringstream oss;
-    oss << "digraph " << compiler::common::SanitizeIdentifier(graph_name, "slr_parse_table")
+    oss << "digraph "
+        << compiler::common::SanitizeIdentifier(graph_name, "slr_parse_table")
         << " {\n";
     oss << "  rankdir=LR;\n";
     oss << "  node [shape=box, fontname=\"monospace\"];\n";

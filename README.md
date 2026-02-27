@@ -21,7 +21,8 @@ This repository is a multi-stage compiler/tooling playground with:
 - `ParserGenerator` - stage-2 generator (typed AST, inline C++ rule actions)
 - `Parser` - parser module built from `ParserGenerator`
 - `Interpreter` - parser+runtime module with REPL/file mode and CFG generation
-- `ExampleLexer`, `ExampleLR0Parser`, `ExampleSLRParser`, `ExampleLR1Parser`, `ExampleLR1Calculator`, `ExampleCalculator` - runnable reference modules
+- `ExampleLexer`, `ExampleLR0Parser`, `ExampleSLRParser`, `ExampleLR1Parser`, `ExampleLR1Calculator`,
+  `ExampleCalculator` - runnable reference modules
 
 ## Build
 
@@ -113,17 +114,17 @@ In file mode it writes:
 
 - literals: number, string, character, boolean
 - expressions:
-  - arithmetic: `+ - * / ^`
-  - comparisons: `== != < <= > >=`
-  - ternary: `cond ? a : b`
-  - function calls
+    - arithmetic: `+ - * / ^`
+    - comparisons: `== != < <= > >=`
+    - ternary: `cond ? a : b`
+    - function calls
 - statements:
-  - `let`
-  - expression statement
-  - `return`
-  - `if / else`
-  - `while`
-  - `for (init; condition; update)`
+    - `let`
+    - expression statement
+    - `return`
+    - `if / else`
+    - `while`
+    - `for (init; condition; update)`
 - user-defined functions
 - builtin math functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `exp`, `ln`, `log10`, `pow`, `min`, `max`, `sum`
 - builtin IO functions: `print`, `println`, `readln`, `input`

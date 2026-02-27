@@ -161,18 +161,18 @@ function(compiler_add_parser_generator_command)
     _compiler_require_args(ARG SPEC_SOURCE SPEC_BUILD OUTPUT_HEADER OUTPUT_SOURCE OUTPUT_AST OUTPUT_COLLECTION OUTPUT_TABLE COMMENT)
 
     _compiler_add_generator_cli_command(
-        SPEC_SOURCE "${ARG_SPEC_SOURCE}"
-        SPEC_BUILD "${ARG_SPEC_BUILD}"
-        EXECUTABLE_TARGET ParserGeneratorExe
-        OUTPUTS
+            SPEC_SOURCE "${ARG_SPEC_SOURCE}"
+            SPEC_BUILD "${ARG_SPEC_BUILD}"
+            EXECUTABLE_TARGET ParserGeneratorExe
+            OUTPUTS
             "${ARG_OUTPUT_HEADER}"
             "${ARG_OUTPUT_SOURCE}"
             "${ARG_OUTPUT_AST}"
             "${ARG_OUTPUT_COLLECTION}"
             "${ARG_OUTPUT_TABLE}"
-        EXTRA_ARGS ${ARG_EXTRA_ARGS}
-        DEPENDS ${ARG_DEPENDS}
-        COMMENT "${ARG_COMMENT}"
+            EXTRA_ARGS ${ARG_EXTRA_ARGS}
+            DEPENDS ${ARG_DEPENDS}
+            COMMENT "${ARG_COMMENT}"
     )
 endfunction()
 
@@ -185,18 +185,18 @@ function(compiler_add_parser_generator_stage1_command)
     _compiler_require_args(ARG SPEC_SOURCE SPEC_BUILD OUTPUT_HEADER OUTPUT_SOURCE OUTPUT_AST OUTPUT_COLLECTION OUTPUT_TABLE COMMENT)
 
     _compiler_add_generator_cli_command(
-        SPEC_SOURCE "${ARG_SPEC_SOURCE}"
-        SPEC_BUILD "${ARG_SPEC_BUILD}"
-        EXECUTABLE_TARGET ParserGeneratorStage1Exe
-        OUTPUTS
+            SPEC_SOURCE "${ARG_SPEC_SOURCE}"
+            SPEC_BUILD "${ARG_SPEC_BUILD}"
+            EXECUTABLE_TARGET ParserGeneratorStage1Exe
+            OUTPUTS
             "${ARG_OUTPUT_HEADER}"
             "${ARG_OUTPUT_SOURCE}"
             "${ARG_OUTPUT_AST}"
             "${ARG_OUTPUT_COLLECTION}"
             "${ARG_OUTPUT_TABLE}"
-        EXTRA_ARGS ${ARG_EXTRA_ARGS}
-        DEPENDS ${ARG_DEPENDS}
-        COMMENT "${ARG_COMMENT}"
+            EXTRA_ARGS ${ARG_EXTRA_ARGS}
+            DEPENDS ${ARG_DEPENDS}
+            COMMENT "${ARG_COMMENT}"
     )
 endfunction()
 
