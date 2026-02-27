@@ -42,6 +42,15 @@ std::string AstBaseClassName(const ASTNodeTypeDecl& decl) {
 }
 
 std::string AstFieldStorageType(const ASTNodeTypeDecl::FieldDecl& field) {
+    if (field.is_list) {
+        if (field.type_name.empty()) {
+            return "std::vector<std::unique_ptr<GeneratedNodeBase>>";
+        }
+        if (IsBuiltinTextType(field.type_name)) {
+            return "std::vector<std::string>";
+        }
+        return "std::vector<std::unique_ptr<" + field.type_name + ">>";
+    }
     if (field.type_name.empty()) {
         return "std::unique_ptr<GeneratedNodeBase>";
     }
@@ -52,6 +61,15 @@ std::string AstFieldStorageType(const ASTNodeTypeDecl::FieldDecl& field) {
 }
 
 std::string AstFieldGetterConstReturnType(const ASTNodeTypeDecl::FieldDecl& field) {
+    if (field.is_list) {
+        if (field.type_name.empty()) {
+            return "const std::vector<std::unique_ptr<GeneratedNodeBase>>&";
+        }
+        if (IsBuiltinTextType(field.type_name)) {
+            return "const std::vector<std::string>&";
+        }
+        return "const std::vector<std::unique_ptr<" + field.type_name + ">>&";
+    }
     if (field.type_name.empty()) {
         return "const GeneratedNodeBase&";
     }
@@ -62,6 +80,15 @@ std::string AstFieldGetterConstReturnType(const ASTNodeTypeDecl::FieldDecl& fiel
 }
 
 std::string AstFieldGetterMutableReturnType(const ASTNodeTypeDecl::FieldDecl& field) {
+    if (field.is_list) {
+        if (field.type_name.empty()) {
+            return "std::vector<std::unique_ptr<GeneratedNodeBase>>&";
+        }
+        if (IsBuiltinTextType(field.type_name)) {
+            return "std::vector<std::string>&";
+        }
+        return "std::vector<std::unique_ptr<" + field.type_name + ">>&";
+    }
     if (field.type_name.empty()) {
         return "GeneratedNodeBase&";
     }
@@ -168,7 +195,7 @@ void EmitTypedAstHeader(std::ostringstream& h, const Stage2SpecAST& spec) {
     h << "} // namespace ast\n\n";
 }
 
-void EmitTypedAstSource(std::ostringstream& cc, const Stage2SpecAST& spec) {
+void EmitTypedAstSource(std::ostringstream& cc, const Stage2SpecAST& spec, std::string_view parser_class_name) {
     cc << "namespace ast {\n\n";
 
     for (const ASTNodeTypeDecl& decl : spec.ast_node_types) {
@@ -206,8 +233,15 @@ void EmitTypedAstSource(std::ostringstream& cc, const Stage2SpecAST& spec) {
             if (IsBuiltinTextType(field.type_name)) {
                 continue;
             }
-            cc << "    out.push_back(ChildFieldView{\"" << compiler::common::EscapeForCppString(field.name)
-               << "\", " << field.name << "_.get()});\n";
+            if (field.is_list) {
+                cc << "    for (const auto& value : " << field.name << "_) {\n";
+                cc << "        out.push_back(ChildFieldView{\"" << compiler::common::EscapeForCppString(field.name)
+                   << "\", value.get()});\n";
+                cc << "    }\n";
+            } else {
+                cc << "    out.push_back(ChildFieldView{\"" << compiler::common::EscapeForCppString(field.name)
+                   << "\", " << field.name << "_.get()});\n";
+            }
         }
         cc << "    return out;\n";
         cc << "}\n\n";
@@ -218,15 +252,22 @@ void EmitTypedAstSource(std::ostringstream& cc, const Stage2SpecAST& spec) {
             if (!IsBuiltinTextType(field.type_name)) {
                 continue;
             }
-            cc << "    out.push_back(TextFieldView{\"" << compiler::common::EscapeForCppString(field.name)
-               << "\", " << field.name << "_});\n";
+            if (field.is_list) {
+                cc << "    for (const auto& value : " << field.name << "_) {\n";
+                cc << "        out.push_back(TextFieldView{\"" << compiler::common::EscapeForCppString(field.name)
+                   << "\", value});\n";
+                cc << "    }\n";
+            } else {
+                cc << "    out.push_back(TextFieldView{\"" << compiler::common::EscapeForCppString(field.name)
+                   << "\", " << field.name << "_});\n";
+            }
         }
         cc << "    return out;\n";
         cc << "}\n\n";
 
         for (const auto& field : decl.field_decls) {
             cc << AstFieldGetterConstReturnType(field) << " " << decl.name << "::" << field.name << "() const {\n";
-            if (IsBuiltinTextType(field.type_name)) {
+            if (field.is_list || IsBuiltinTextType(field.type_name)) {
                 cc << "    return " << field.name << "_;\n";
             } else {
                 cc << "    if (!" << field.name << "_) throw std::runtime_error(\"AST child field is null\");\n";
@@ -235,7 +276,7 @@ void EmitTypedAstSource(std::ostringstream& cc, const Stage2SpecAST& spec) {
             cc << "}\n\n";
 
             cc << AstFieldGetterMutableReturnType(field) << " " << decl.name << "::" << field.name << "() {\n";
-            if (IsBuiltinTextType(field.type_name)) {
+            if (field.is_list || IsBuiltinTextType(field.type_name)) {
                 cc << "    return " << field.name << "_;\n";
             } else {
                 cc << "    if (!" << field.name << "_) throw std::runtime_error(\"AST child field is null\");\n";
@@ -255,59 +296,100 @@ void EmitTypedAstSource(std::ostringstream& cc, const Stage2SpecAST& spec) {
         }
     }
 
-    cc << "const compiler::parsergen::GeneratedASTNodeChildField* FindChildField(const compiler::parsergen::GeneratedASTNode& node, std::string_view name) {\n";
-    cc << "    for (const auto& field : node.ChildFields()) {\n";
-    cc << "        if (field.name == name) return &field;\n";
+    cc << "std::string TakeLexemeChild(const compiler::parsergen::CSTNode& reduction_node, std::size_t rhs_index) {\n";
+    cc << "    if (rhs_index == 0 || rhs_index > reduction_node.ChildCount()) {\n";
+    cc << "        throw compiler::parsergen::BuildException(\"RHS index out of range while taking lexeme child\");\n";
     cc << "    }\n";
-    cc << "    return nullptr;\n";
+    cc << "    const compiler::parsergen::CSTNode& child = reduction_node.Child(rhs_index - 1);\n";
+    cc << "    if (!child.IsTerminal()) {\n";
+    cc << "        throw compiler::parsergen::BuildException(\"expected terminal child for .lexeme action argument\");\n";
+    cc << "    }\n";
+    cc << "    return std::string(child.Lexeme());\n";
     cc << "}\n\n";
 
-    cc << "const compiler::parsergen::GeneratedASTNodeTextField* FindTextField(const compiler::parsergen::GeneratedASTNode& node, std::string_view name) {\n";
-    cc << "    for (const auto& field : node.TextFields()) {\n";
-    cc << "        if (field.name == name) return &field;\n";
-    cc << "    }\n";
-    cc << "    return nullptr;\n";
-    cc << "}\n\n";
-
-    cc << "std::unique_ptr<GeneratedNodeBase> ConvertNode(const compiler::parsergen::GeneratedASTNode& node);\n\n";
+    cc << "std::unique_ptr<GeneratedNodeBase> ConvertNode(const compiler::parsergen::CSTNode& node);\n\n";
     cc << "template <typename T>\n";
-    cc << "std::unique_ptr<T> ConvertNodeAs(const compiler::parsergen::GeneratedASTNode& node) {\n";
+    cc << "std::unique_ptr<T> ConvertNodeAs(const compiler::parsergen::CSTNode& node) {\n";
     cc << "    std::unique_ptr<GeneratedNodeBase> converted = ConvertNode(node);\n";
     cc << "    auto* raw = dynamic_cast<T*>(converted.release());\n";
     cc << "    if (raw == nullptr) {\n";
-    cc << "        throw compiler::parsergen::BuildException(\"generated AST node type mismatch during typed AST conversion\");\n";
+    cc << "        throw compiler::parsergen::BuildException(\"typed AST conversion produced unexpected node type\");\n";
     cc << "    }\n";
     cc << "    return std::unique_ptr<T>(raw);\n";
     cc << "}\n\n";
 
-    cc << "std::unique_ptr<GeneratedNodeBase> ConvertNode(const compiler::parsergen::GeneratedASTNode& node) {\n";
-    for (const ASTNodeTypeDecl& decl : spec.ast_node_types) {
-        if (decl.is_abstract) {
-            continue;
-        }
-        cc << "    if (node.KindName() == \"" << compiler::common::EscapeForCppString(decl.name) << "\") {\n";
-        cc << "        return std::make_unique<" << decl.name << ">(";
-        for (std::size_t i = 0; i < decl.field_decls.size(); ++i) {
-            if (i != 0) {
-                cc << ", ";
-            }
-            const auto& field = decl.field_decls[i];
-            if (IsBuiltinTextType(field.type_name)) {
-                cc << "[&]() -> std::string { const auto* f = FindTextField(node, \""
-                   << compiler::common::EscapeForCppString(field.name)
-                   << "\"); if (f == nullptr) throw compiler::parsergen::BuildException(\"missing text field in generated AST\"); return f->value; }()";
+    cc << "template <typename T>\n";
+    cc << "std::unique_ptr<T> TakeASTChildAs(const compiler::parsergen::CSTNode& reduction_node, std::size_t rhs_index) {\n";
+    cc << "    if (rhs_index == 0 || rhs_index > reduction_node.ChildCount()) {\n";
+    cc << "        throw compiler::parsergen::BuildException(\"RHS index out of range while taking AST child\");\n";
+    cc << "    }\n";
+    cc << "    return ConvertNodeAs<T>(reduction_node.Child(rhs_index - 1));\n";
+    cc << "}\n\n";
+
+    cc << "std::unique_ptr<GeneratedNodeBase> ConvertNode(const compiler::parsergen::CSTNode& node) {\n";
+    cc << "    if (node.IsTerminal()) {\n";
+    cc << "        throw compiler::parsergen::BuildException(\"cannot convert terminal CST node to typed AST node\");\n";
+    cc << "    }\n";
+    cc << "    const compiler::parsergen::FlattenedProduction& production =\n";
+    cc << "        compiler::parsergen::GetCSTReductionProduction(" << parser_class_name << "::ParseTable(), node);\n";
+    for (std::size_t rule_index = 0; rule_index < spec.rules.size(); ++rule_index) {
+        const RuleDefinition& rule = spec.rules[rule_index];
+        for (std::size_t alt_index = 0; alt_index < rule.alternatives.size(); ++alt_index) {
+            const RuleAlternative& alt = rule.alternatives[alt_index];
+            const RuleAction& action = alt.action;
+            cc << "    if (production.source_rule_index == " << rule_index
+               << " && production.source_alternative_index == " << alt_index << ") {\n";
+            if (action.kind == RuleActionKind::None) {
+                cc << "        throw compiler::parsergen::BuildException(\"rule alternative has no AST action\");\n";
+            } else if (action.kind == RuleActionKind::Pass) {
+                cc << "        return ConvertNode(node.Child(" << (action.pass_rhs_index - 1) << "));\n";
+            } else if (action.kind == RuleActionKind::InlineCpp) {
+                cc << action.cpp_code;
+                if (!action.cpp_code.empty() && action.cpp_code.back() != '\n') {
+                    cc << "\n";
+                }
             } else {
-                const std::string target_type = field.type_name.empty() ? "GeneratedNodeBase" : field.type_name;
-                cc << "[&]() -> std::unique_ptr<" << target_type << "> { const auto* f = FindChildField(node, \""
-                   << compiler::common::EscapeForCppString(field.name)
-                   << "\"); if (f == nullptr || !f->value) throw compiler::parsergen::BuildException(\"missing child field in generated AST\"); return ConvertNodeAs<"
-                   << target_type << ">(*f->value); }()";
+                const ASTNodeTypeDecl* ast_decl = nullptr;
+                for (const ASTNodeTypeDecl& decl : spec.ast_node_types) {
+                    if (decl.name == action.target_node_name) {
+                        ast_decl = &decl;
+                        break;
+                    }
+                }
+                if (ast_decl == nullptr) {
+                    cc << "        throw compiler::parsergen::BuildException(\"unknown AST node type in action\");\n";
+                } else {
+                    cc << "        return std::make_unique<" << ast_decl->name << ">(";
+                    for (std::size_t i = 0; i < action.args.size(); ++i) {
+                        if (i != 0) {
+                            cc << ", ";
+                        }
+                        const ActionArg& arg = action.args[i];
+                        const ASTNodeTypeDecl::FieldDecl& field = ast_decl->field_decls[i];
+                        if (field.is_list) {
+                            if (IsBuiltinTextType(field.type_name)) {
+                                cc << "[&]() -> std::vector<std::string> { std::vector<std::string> values; "
+                                      "values.push_back(TakeLexemeChild(node, "
+                                   << arg.rhs_index << ")); return values; }()";
+                            } else {
+                                cc << "[&]() -> std::vector<std::unique_ptr<" << field.type_name
+                                   << ">> { std::vector<std::unique_ptr<" << field.type_name
+                                   << ">> values; values.push_back(TakeASTChildAs<" << field.type_name << ">(node, "
+                                   << arg.rhs_index << ")); return values; }()";
+                            }
+                        } else if (IsBuiltinTextType(field.type_name)) {
+                            cc << "TakeLexemeChild(node, " << arg.rhs_index << ")";
+                        } else {
+                            cc << "TakeASTChildAs<" << field.type_name << ">(node, " << arg.rhs_index << ")";
+                        }
+                    }
+                    cc << ");\n";
+                }
             }
+            cc << "    }\n";
         }
-        cc << ");\n";
-        cc << "    }\n";
     }
-    cc << "    throw compiler::parsergen::BuildException(std::string(\"unknown generated AST node kind: \") + std::string(node.KindName()));\n";
+    cc << "    throw compiler::parsergen::BuildException(\"unable to match CST production to typed AST conversion branch\");\n";
     cc << "}\n\n";
 
     cc << "} // namespace ast\n\n";
@@ -373,9 +455,12 @@ GeneratedParserFiles GenerateCppParser(const Stage2SpecAST& spec,
     {
         std::ostringstream cc;
         cc << "#include \"" << out.header_filename << "\"\n\n";
+        cc << "#include \"Common/Graphviz.h\"\n";
+        cc << "#include \"Common/Identifier.h\"\n\n";
         cc << "#include <cmath>\n";
         cc << "#include <cstdlib>\n";
         cc << "#include <memory>\n";
+        cc << "#include <sstream>\n";
         cc << "#include <string>\n";
         cc << "#include <string_view>\n";
         cc << "#include <utility>\n";
@@ -390,7 +475,7 @@ GeneratedParserFiles GenerateCppParser(const Stage2SpecAST& spec,
         cc << "} // namespace\n\n";
 
         if (emit_typed_ast) {
-            EmitTypedAstSource(cc, spec);
+            EmitTypedAstSource(cc, spec, out.parser_class_name);
         }
 
         cc << "const compiler::parsergen::Stage2SpecAST& " << out.parser_class_name << "::Spec() {\n";
@@ -421,8 +506,7 @@ GeneratedParserFiles GenerateCppParser(const Stage2SpecAST& spec,
         cc << "    CST cst = Parse(tokens);\n";
         if (emit_typed_ast) {
             cc << "    AST out;\n";
-            cc << "    out.backing = compiler::parsergen::BuildGeneratedASTFromCST(cst, ParseTable(), Spec());\n";
-            cc << "    out.root = ast::ConvertNode(out.backing.Root());\n";
+            cc << "    out.root = ast::ConvertNode(cst.Root());\n";
             cc << "    if (!out.root) { throw compiler::parsergen::BuildException(\"generated AST conversion produced empty root\"); }\n";
             cc << "    return out;\n";
         } else {
@@ -437,8 +521,38 @@ GeneratedParserFiles GenerateCppParser(const Stage2SpecAST& spec,
 
         cc << "std::string " << out.parser_class_name << "::ASTToGraphvizDot(const AST& ast, std::string_view graph_name) {\n";
         if (emit_typed_ast) {
-            cc << "    if (ast.backing.Empty()) { throw compiler::parsergen::BuildException(\"cannot render empty AST backing graph\"); }\n";
-            cc << "    return compiler::parsergen::GeneratedASTToGraphvizDot(ast.backing, graph_name);\n";
+            cc << "    if (ast.Empty()) { throw compiler::parsergen::BuildException(\"cannot render empty AST\"); }\n";
+            cc << "    std::ostringstream out;\n";
+            cc << "    out << \"digraph \" << compiler::common::SanitizeIdentifier(graph_name, \"ast\") << \" {\\n\";\n";
+            cc << "    out << \"  rankdir=TB;\\n\";\n";
+            cc << "    out << \"  node [shape=box];\\n\";\n";
+            cc << "    out << \"  __root [shape=point];\\n\";\n";
+            cc << "    std::size_t next_id = 0;\n";
+            cc << "    const auto emit_node = [&](const auto& self, const ast::GeneratedNodeBase& node_ref, std::ostringstream& out_ref,\n";
+            cc << "                               std::size_t& next_id_ref) -> std::size_t {\n";
+            cc << "        const std::size_t id = next_id_ref++;\n";
+            cc << "        std::string label(node_ref.KindName());\n";
+            cc << "        for (const auto& text_field : node_ref.TextFields()) {\n";
+            cc << "            label.push_back('\\n');\n";
+            cc << "            label += std::string(text_field.name);\n";
+            cc << "            label.push_back('=');\n";
+            cc << "            label += std::string(text_field.value);\n";
+            cc << "        }\n";
+            cc << "        out_ref << \"  n\" << id << \" [label=\\\"\" << compiler::common::EscapeGraphvizLabel(label) << \"\\\"];\\n\";\n";
+            cc << "        for (const auto& child_field : node_ref.ChildFields()) {\n";
+            cc << "            if (child_field.value == nullptr) {\n";
+            cc << "                continue;\n";
+            cc << "            }\n";
+            cc << "            const std::size_t child_id = self(self, *child_field.value, out_ref, next_id_ref);\n";
+            cc << "            out_ref << \"  n\" << id << \" -> n\" << child_id << \" [label=\\\"\"\n";
+            cc << "                    << compiler::common::EscapeGraphvizLabel(child_field.name) << \"\\\"];\\n\";\n";
+            cc << "        }\n";
+            cc << "        return id;\n";
+            cc << "    };\n";
+            cc << "    const std::size_t root_id = emit_node(emit_node, ast.Root(), out, next_id);\n";
+            cc << "    out << \"  __root -> n\" << root_id << \";\\n\";\n";
+            cc << "    out << \"}\\n\";\n";
+            cc << "    return out.str();\n";
         } else {
             cc << "    return compiler::parsergen::GeneratedASTToGraphvizDot(ast, graph_name);\n";
         }

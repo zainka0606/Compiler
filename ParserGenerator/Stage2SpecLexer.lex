@@ -16,6 +16,8 @@ token LPAREN = /\(/;
 token RPAREN = /\)/;
 token LBRACE = /\{/;
 token RBRACE = /\}/;
+token LBRACKET = /\[/;
+token RBRACKET = /\]/;
 token COMMA = /,/;
 token COLON = /:/;
 token DOLLAR = /\$/;
@@ -30,6 +32,7 @@ token KW_ASTBASE = "astbase";
 token KW_LEXEME = "lexeme";
 token KW_VIRTUAL = "virtual";
 token KW_OVERRIDE = "override";
+token KW_CPP = "cpp";
 
 token EQUAL = "=";
 token CODE = /`[^`]*`/;

@@ -1,0 +1,26 @@
+fn sum_to(n) {
+  let i = 0;
+  let acc = 0;
+  while (i < n) {
+    let acc = acc + i;
+    let i = i + 1;
+  }
+  return acc;
+}
+
+let greeting = "sum_to(5) = ";
+let bang = '!';
+println(greeting + sum_to(5) + bang);
+
+let choose = true ? 7 : 9;
+
+for (let j = 0; j < 3; let j = j + 1) {
+  print(j);
+}
+println("");
+
+if (choose >= 7) {
+  "ok";
+} else {
+  "bad";
+}

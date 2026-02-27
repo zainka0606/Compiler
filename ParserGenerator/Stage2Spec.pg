@@ -10,6 +10,7 @@ token KW_ASTBASE;
 token KW_LEXEME;
 token KW_VIRTUAL;
 token KW_OVERRIDE;
+token KW_CPP;
 token IDENT;
 token INT;
 token ARROW;
@@ -20,6 +21,8 @@ token LPAREN;
 token RPAREN;
 token LBRACE;
 token RBRACE;
+token LBRACKET;
+token RBRACKET;
 token COMMA;
 token COLON;
 token DOLLAR;
@@ -51,7 +54,8 @@ rule AstDecl -> KW_AST IDENT LPAREN RPAREN SEMI
              | KW_AST IDENT LPAREN FieldSpecList RPAREN LBRACE MethodImplDeclList RBRACE SEMI
              | KW_AST IDENT COLON IDENT LPAREN FieldSpecList RPAREN LBRACE MethodImplDeclList RBRACE SEMI;
 rule FieldSpecList -> FieldSpec | FieldSpecList COMMA FieldSpec;
-rule FieldSpec -> IDENT | IDENT COLON IDENT;
+rule FieldSpec -> IDENT | IDENT COLON TypeSpec;
+rule TypeSpec -> IDENT | IDENT LBRACKET RBRACKET;
 rule MethodImplDeclList -> MethodImplDecl | MethodImplDeclList MethodImplDecl;
 rule MethodImplDecl -> KW_OVERRIDE IDENT LPAREN RPAREN ARROW IDENT EQUAL CODE SEMI;
 
@@ -60,6 +64,6 @@ rule RuleAltList -> RuleAltList PIPE RuleAlt | RuleAlt;
 rule RuleAlt -> SymbolList | SymbolList FATARROW ActionExpr;
 rule SymbolList -> SymbolList IDENT | IDENT;
 
-rule ActionExpr -> IDENT LPAREN RPAREN | IDENT LPAREN ActionArgList RPAREN;
+rule ActionExpr -> IDENT LPAREN RPAREN | IDENT LPAREN ActionArgList RPAREN | KW_CPP CODE;
 rule ActionArgList -> ActionArgList COMMA ActionArg | ActionArg;
 rule ActionArg -> DOLLAR INT | DOLLAR INT DOT KW_LEXEME;

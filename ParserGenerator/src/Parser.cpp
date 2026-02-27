@@ -43,6 +43,8 @@ const char* TerminalNameForToken(SpecTokenKind kind) {
             return "KW_VIRTUAL";
         case SpecTokenKind::KW_OVERRIDE:
             return "KW_OVERRIDE";
+        case SpecTokenKind::KW_CPP:
+            return "KW_CPP";
         case SpecTokenKind::IDENT:
             return "IDENT";
         case SpecTokenKind::INT:
@@ -63,6 +65,10 @@ const char* TerminalNameForToken(SpecTokenKind kind) {
             return "LBRACE";
         case SpecTokenKind::RBRACE:
             return "RBRACE";
+        case SpecTokenKind::LBRACKET:
+            return "LBRACKET";
+        case SpecTokenKind::RBRACKET:
+            return "RBRACKET";
         case SpecTokenKind::COMMA:
             return "COMMA";
         case SpecTokenKind::COLON:
@@ -131,10 +137,35 @@ ASTNodeTypeDecl::FieldDecl ParseFieldSpec(const CSTNode& node, const LR1ParseTab
         const std::string name = ExpectTerminalLexeme(node.Child(0));
         return ASTNodeTypeDecl::FieldDecl{.name = name, .type_name = {}};
     }
+    auto parse_type_spec = [&](const CSTNode& type_node) -> ASTNodeTypeDecl::FieldDecl {
+        if (type_node.Symbol() != "TypeSpec") {
+            throw BuildException("expected TypeSpec node, got '" + std::string(type_node.Symbol()) + "'");
+        }
+        if (MatchesReduction(parse_table, type_node, "TypeSpec", {"IDENT"})) {
+            return ASTNodeTypeDecl::FieldDecl{
+                .name = ExpectTerminalLexeme(node.Child(0)),
+                .type_name = ExpectTerminalLexeme(type_node.Child(0)),
+                .is_list = false,
+            };
+        }
+        if (MatchesReduction(parse_table, type_node, "TypeSpec", {"IDENT", "LBRACKET", "RBRACKET"})) {
+            return ASTNodeTypeDecl::FieldDecl{
+                .name = ExpectTerminalLexeme(node.Child(0)),
+                .type_name = ExpectTerminalLexeme(type_node.Child(0)),
+                .is_list = true,
+            };
+        }
+        throw BuildException("unsupported TypeSpec CST shape");
+    };
+
+    if (MatchesReduction(parse_table, node, "FieldSpec", {"IDENT", "COLON", "TypeSpec"})) {
+        return parse_type_spec(node.Child(2));
+    }
     if (MatchesReduction(parse_table, node, "FieldSpec", {"IDENT", "COLON", "IDENT"})) {
         return ASTNodeTypeDecl::FieldDecl{
             .name = ExpectTerminalLexeme(node.Child(0)),
             .type_name = ExpectTerminalLexeme(node.Child(2)),
+            .is_list = false,
         };
     }
 
@@ -303,6 +334,15 @@ RuleAction ParseActionExpr(const CSTNode& node, const LR1ParseTable& parse_table
     std::string callee;
     std::vector<ActionArg> args;
 
+    if (MatchesReduction(parse_table, node, "ActionExpr", {"KW_CPP", "CODE"})) {
+        return RuleAction{
+            .kind = RuleActionKind::InlineCpp,
+            .target_node_name = {},
+            .pass_rhs_index = 0,
+            .args = {},
+            .cpp_code = ParseCodeLiteral(node.Child(1)),
+        };
+    }
     if (MatchesReduction(parse_table, node, "ActionExpr", {"IDENT", "LPAREN", "RPAREN"})) {
         callee = ExpectTerminalLexeme(node.Child(0));
     } else if (MatchesReduction(parse_table, node, "ActionExpr", {"IDENT", "LPAREN", "ActionArgList", "RPAREN"})) {
@@ -329,6 +369,7 @@ RuleAction ParseActionExpr(const CSTNode& node, const LR1ParseTable& parse_table
         .target_node_name = std::move(callee),
         .pass_rhs_index = 0,
         .args = std::move(args),
+        .cpp_code = {},
     };
 }
 
@@ -514,6 +555,16 @@ std::string RuleActionToString(const RuleAction& action) {
     }
     if (action.kind == RuleActionKind::Pass) {
         oss << "Pass($" << action.pass_rhs_index << ")";
+        return oss.str();
+    }
+    if (action.kind == RuleActionKind::InlineCpp) {
+        std::string preview = action.cpp_code;
+        constexpr std::size_t kMaxPreview = 48;
+        if (preview.size() > kMaxPreview) {
+            preview.resize(kMaxPreview);
+            preview += "...";
+        }
+        oss << "cpp {" << preview << "}";
         return oss.str();
     }
 
@@ -712,6 +763,13 @@ void ValidateRuleAlternative(const RuleAlternative& alt,
         return;
     }
 
+    if (alt.action.kind == RuleActionKind::InlineCpp) {
+        if (alt.action.cpp_code.empty()) {
+            throw BuildException("inline cpp action is empty in rule '" + lhs + "'");
+        }
+        return;
+    }
+
     if (alt.action.kind == RuleActionKind::Pass) {
         check_rhs_ref(alt.action.pass_rhs_index);
         const std::string& symbol = alt.symbols[alt.action.pass_rhs_index - 1];
@@ -771,6 +829,16 @@ void ValidateRuleAlternative(const RuleAlternative& alt,
                                          "' and must be populated with an AST child ($N)");
                 }
             }
+            if (field.is_list && arg.kind == ActionArgKind::ChildLexeme && !IsBuiltinAstFieldType(field.type_name)) {
+                throw BuildException("list field '" + field.name + "' in AST type '" + ast_decl.name +
+                                     "' has AST element type '" + field.type_name +
+                                     "' and cannot be populated from .lexeme");
+            }
+            if (field.is_list && arg.kind == ActionArgKind::ChildAST && IsBuiltinAstFieldType(field.type_name)) {
+                throw BuildException("list field '" + field.name + "' in AST type '" + ast_decl.name +
+                                     "' has text element type '" + field.type_name +
+                                     "' and must be populated from .lexeme");
+            }
         }
     }
 }
@@ -810,6 +878,10 @@ std::unique_ptr<GeneratedASTNode> BuildGeneratedASTNodeRecursive(const CSTNode& 
 
     if (action.kind == RuleActionKind::None) {
         throw BuildException("cannot build AST for reduction without an action on rule alternative");
+    }
+
+    if (action.kind == RuleActionKind::InlineCpp) {
+        throw BuildException("cannot build generic AST for inline cpp action; use typed ParseToAST output");
     }
 
     if (action.kind == RuleActionKind::Pass) {
@@ -1051,6 +1123,9 @@ std::string Stage2SpecASTToGraphvizDot(const Stage2SpecAST& spec, std::string_vi
                 label << decl.fields[i];
                 if (field_decl != nullptr && !field_decl->type_name.empty()) {
                     label << ": " << field_decl->type_name;
+                    if (field_decl->is_list) {
+                        label << "[]";
+                    }
                 }
             }
             label << ")";

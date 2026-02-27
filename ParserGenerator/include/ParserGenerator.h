@@ -47,6 +47,7 @@ struct ASTNodeTypeDecl {
     struct FieldDecl {
         std::string name;
         std::string type_name; // empty means legacy/untyped field declaration
+        bool is_list = false;
     };
     struct VirtualMethodDecl {
         std::string name;
@@ -76,6 +77,7 @@ enum class RuleActionKind {
     None,
     Pass,
     Construct,
+    InlineCpp,
 };
 
 struct RuleAction {
@@ -83,6 +85,7 @@ struct RuleAction {
     std::string target_node_name;
     std::size_t pass_rhs_index = 0; // 1-based, only for Pass
     std::vector<ActionArg> args;
+    std::string cpp_code;
 };
 
 struct RuleAlternative {
