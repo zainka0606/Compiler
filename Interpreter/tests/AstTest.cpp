@@ -68,12 +68,28 @@ int main(int argc, char **argv) {
         }
 
         std::cout << "Functions:\n";
-        for (const std::string &name : Sorted(annotation.symbols.functions)) {
+        for (const std::string &name : Sorted(annotation.symbols.Functions())) {
             std::cout << "  - " << name << "\n";
         }
 
+        std::cout << "Classes:\n";
+        for (const std::string &name : SortedKeys(annotation.class_fields)) {
+            std::cout << "  - " << name << ":";
+            for (const std::string &field : annotation.class_fields.at(name)) {
+                std::cout << " " << field;
+            }
+            const auto methods_it = annotation.class_methods.find(name);
+            if (methods_it != annotation.class_methods.end()) {
+                std::cout << " | methods:";
+                for (const std::string &method : methods_it->second) {
+                    std::cout << " " << method;
+                }
+            }
+            std::cout << "\n";
+        }
+
         std::cout << "Globals:\n";
-        for (const std::string &name : Sorted(annotation.symbols.globals)) {
+        for (const std::string &name : Sorted(annotation.symbols.Globals())) {
             std::cout << "  - " << name << "\n";
         }
 

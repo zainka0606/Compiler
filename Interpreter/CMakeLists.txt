@@ -2,8 +2,9 @@ set(INTERPRETER_GRAMMAR_SPEC_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/Language.pg")
 set(INTERPRETER_GRAMMAR_SPEC_BUILD "${CMAKE_CURRENT_BINARY_DIR}/Language.pg")
 set(INTERPRETER_LEXER_SPEC_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/LanguageLexer.lex")
 set(INTERPRETER_LEXER_SPEC_BUILD "${CMAKE_CURRENT_BINARY_DIR}/LanguageLexer.lex")
-set(INTERPRETER_INPUT_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/Input.txt")
+set(INTERPRETER_INPUT_SOURCE "${CMAKE_SOURCE_DIR}/Examples/Mandelbrot.txt")
 set(INTERPRETER_INPUT_BUILD "${CMAKE_CURRENT_BINARY_DIR}/Input.txt")
+set(INTERPRETER_STDLIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/StdLib")
 
 # ParserGenerator derives the output directory from the input filename stem:
 # Language.pg -> <binary dir>/Language/
@@ -80,6 +81,7 @@ add_custom_target(InterpreterLexerCodegen
 )
 
 add_library(Interpreter
+        src/SymbolTable.cpp
         src/CFG.cpp
         src/Interpreter.cpp
         "${INTERPRETER_GENERATED_PARSER_SOURCE}"
@@ -104,6 +106,11 @@ target_link_libraries(Interpreter
         ParserGenerator
         PRIVATE
         Common
+)
+
+target_compile_definitions(Interpreter
+        PRIVATE
+        INTERPRETER_STDLIB_DIR=\"${INTERPRETER_STDLIB_DIR}\"
 )
 
 add_library(compiler::Interpreter ALIAS Interpreter)

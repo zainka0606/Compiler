@@ -2,65 +2,106 @@ grammar MiniLangInterpreter;
 start Program;
 
 token KW_FN;
+token KW_CLASS;
 token KW_LET;
 token KW_RETURN;
 token KW_IF;
 token KW_ELSE;
 token KW_FOR;
 token KW_WHILE;
+token KW_SWITCH;
+token KW_CASE;
+token KW_DEFAULT;
 token KW_TRUE;
 token KW_FALSE;
 token ID;
+token FSTRING;
 token STRING;
 token CHAR;
 token NUMBER;
+token SHLEQ;
+token SHREQ;
+token PLUSEQ;
+token MINUSEQ;
+token STAREQ;
+token SLASHEQ;
+token MODEQ;
+token ANDEQ;
+token OREQ;
+token CARETEQ;
 token EQEQ;
 token NEQ;
+token LAND;
+token LOR;
+token SHL;
+token SHR;
 token LTE;
 token GTE;
 token LT;
 token GT;
 token PLUS;
 token MINUS;
+token POW;
 token STAR;
 token SLASH;
+token MOD;
+token AMP;
+token PIPE;
+token BANG;
+token TILDE;
 token CARET;
 token EQUAL;
 token COMMA;
 token SEMI;
 token QMARK;
 token COLON;
+token DOT;
 token LPAREN;
 token RPAREN;
 token LBRACE;
 token RBRACE;
+token LBRACKET;
+token RBRACKET;
 
 astbase Node;
 astbase Item : Node;
+astbase ClassMember : Node;
 astbase Statement : Node;
 astbase Expr : Node;
 astbase ForInit : Node;
 
 ast Program : Node(items: ItemList);
 ast ItemList : Node(items: Item[]);
+ast ClassMemberList : Node(members: ClassMember[]);
 ast StatementList : Node(statements: Statement[]);
+ast SwitchCaseList : Node(cases: SwitchCase[]);
 ast ParamList : Node(names: string[]);
 ast ArgList : Node(args: Expr[]);
 
 ast FunctionDecl : Item(name: string, params: string[], body: Statement[]);
+ast FieldDecl : ClassMember(name: string);
+ast MethodDecl : ClassMember(name: string, params: string[], body: Statement[]);
+ast ClassDecl : Item(name: string, members: ClassMember[]);
 ast TopStatement : Item(statement: Statement);
 
 ast LetStmt : Statement(name: string, expr: Expr);
+ast AssignStmt : Statement(target: Expr, expr: Expr);
+ast CompoundAssignStmt : Statement(target: Expr, op: string, expr: Expr);
 ast ReturnStmt : Statement(expr: Expr);
 ast ExprStmt : Statement(expr: Expr);
 ast IfStmt : Statement(condition: Expr, then_body: Statement[], else_body: Statement[]);
 ast WhileStmt : Statement(condition: Expr, body: Statement[]);
 ast ForStmt : Statement(init: ForInit, condition: Expr, update: ForInit, body: Statement[]);
+ast SwitchStmt : Statement(condition: Expr, cases: SwitchCase[], default_body: Statement[]);
+ast SwitchCase : Node(match: Expr, body: Statement[]);
 
 ast ForInitLet : ForInit(name: string, expr: Expr);
+ast ForInitAssign : ForInit(target: Expr, expr: Expr);
+ast ForInitCompound : ForInit(target: Expr, op: string, expr: Expr);
 ast ForInitExpr : ForInit(expr: Expr);
 
 ast Number : Expr(value: string);
+ast FormattedString : Expr(value: string);
 ast StringLiteral : Expr(value: string);
 ast CharLiteral : Expr(value: string);
 ast BoolLiteral : Expr(value: string);
@@ -69,8 +110,18 @@ ast Add : Expr(lhs: Expr, rhs: Expr);
 ast Subtract : Expr(lhs: Expr, rhs: Expr);
 ast Multiply : Expr(lhs: Expr, rhs: Expr);
 ast Divide : Expr(lhs: Expr, rhs: Expr);
+ast Modulo : Expr(lhs: Expr, rhs: Expr);
 ast Pow : Expr(lhs: Expr, rhs: Expr);
 ast Negate : Expr(expr: Expr);
+ast LogicalNot : Expr(expr: Expr);
+ast BitwiseNot : Expr(expr: Expr);
+ast LogicalAnd : Expr(lhs: Expr, rhs: Expr);
+ast LogicalOr : Expr(lhs: Expr, rhs: Expr);
+ast BitwiseAnd : Expr(lhs: Expr, rhs: Expr);
+ast BitwiseOr : Expr(lhs: Expr, rhs: Expr);
+ast BitwiseXor : Expr(lhs: Expr, rhs: Expr);
+ast ShiftLeft : Expr(lhs: Expr, rhs: Expr);
+ast ShiftRight : Expr(lhs: Expr, rhs: Expr);
 ast Equal : Expr(lhs: Expr, rhs: Expr);
 ast NotEqual : Expr(lhs: Expr, rhs: Expr);
 ast Less : Expr(lhs: Expr, rhs: Expr);
@@ -79,6 +130,10 @@ ast Greater : Expr(lhs: Expr, rhs: Expr);
 ast GreaterEqual : Expr(lhs: Expr, rhs: Expr);
 ast Ternary : Expr(condition: Expr, when_true: Expr, when_false: Expr);
 ast Call : Expr(name: string, args: Expr[]);
+ast MethodCall : Expr(object: Expr, name: string, args: Expr[]);
+ast MemberAccess : Expr(object: Expr, member: string);
+ast ArrayLiteral : Expr(elements: Expr[]);
+ast IndexAccess : Expr(object: Expr, index: Expr);
 
 rule Program -> ItemList => Program($1);
 
@@ -94,6 +149,7 @@ return list;
 `;
 
 rule Item -> FunctionDecl => Pass($1)
+         | ClassDecl => Pass($1)
          | Statement => TopStatement($1);
 
 rule FunctionDecl -> KW_FN ID LPAREN ParamList RPAREN Block => cpp `
@@ -118,6 +174,38 @@ params->names().push_back(TakeLexemeChild(node, 3));
 return params;
 `;
 
+rule ClassDecl -> KW_CLASS ID LBRACE ClassMemberList RBRACE => cpp `
+auto members = TakeASTChildAs<ClassMemberList>(node, 4);
+return std::make_unique<ClassDecl>(TakeLexemeChild(node, 2), std::move(members->members()));
+`
+                | KW_CLASS ID LBRACE RBRACE => cpp `
+std::vector<std::unique_ptr<ClassMember>> members;
+return std::make_unique<ClassDecl>(TakeLexemeChild(node, 2), std::move(members));
+`;
+
+rule ClassMemberList -> ClassMember => cpp `
+std::vector<std::unique_ptr<ClassMember>> members;
+members.push_back(TakeASTChildAs<ClassMember>(node, 1));
+return std::make_unique<ClassMemberList>(std::move(members));
+`
+                    | ClassMemberList ClassMember => cpp `
+auto members = TakeASTChildAs<ClassMemberList>(node, 1);
+members->members().push_back(TakeASTChildAs<ClassMember>(node, 2));
+return members;
+`;
+
+rule ClassMember -> ID SEMI => FieldDecl($1.lexeme)
+                  | KW_FN ID LPAREN ParamList RPAREN Block => cpp `
+auto params = TakeASTChildAs<ParamList>(node, 4);
+auto body = TakeASTChildAs<StatementList>(node, 6);
+return std::make_unique<MethodDecl>(TakeLexemeChild(node, 2), std::move(params->names()), std::move(body->statements()));
+`
+                  | KW_FN ID LPAREN RPAREN Block => cpp `
+std::vector<std::string> params;
+auto body = TakeASTChildAs<StatementList>(node, 5);
+return std::make_unique<MethodDecl>(TakeLexemeChild(node, 2), std::move(params), std::move(body->statements()));
+`;
+
 rule Block -> LBRACE StatementList RBRACE => Pass($2);
 
 rule StatementList -> Statement => cpp `
@@ -132,13 +220,27 @@ return statements;
 `;
 
 rule Statement -> LetStmt => Pass($1)
+              | AssignStmt => Pass($1)
+              | CompoundAssignStmt => Pass($1)
               | ReturnStmt => Pass($1)
               | ExprStmt => Pass($1)
               | IfStmt => Pass($1)
               | WhileStmt => Pass($1)
-              | ForStmt => Pass($1);
+              | ForStmt => Pass($1)
+              | SwitchStmt => Pass($1);
 
 rule LetStmt -> KW_LET ID EQUAL Expr SEMI => LetStmt($2.lexeme, $4);
+rule AssignStmt -> AssignmentTarget EQUAL Expr SEMI => AssignStmt($1, $3);
+rule CompoundAssignStmt -> AssignmentTarget PLUSEQ Expr SEMI => CompoundAssignStmt($1, $2.lexeme, $3)
+                        | AssignmentTarget MINUSEQ Expr SEMI => CompoundAssignStmt($1, $2.lexeme, $3)
+                        | AssignmentTarget STAREQ Expr SEMI => CompoundAssignStmt($1, $2.lexeme, $3)
+                        | AssignmentTarget SLASHEQ Expr SEMI => CompoundAssignStmt($1, $2.lexeme, $3)
+                        | AssignmentTarget MODEQ Expr SEMI => CompoundAssignStmt($1, $2.lexeme, $3)
+                        | AssignmentTarget ANDEQ Expr SEMI => CompoundAssignStmt($1, $2.lexeme, $3)
+                        | AssignmentTarget OREQ Expr SEMI => CompoundAssignStmt($1, $2.lexeme, $3)
+                        | AssignmentTarget CARETEQ Expr SEMI => CompoundAssignStmt($1, $2.lexeme, $3)
+                        | AssignmentTarget SHLEQ Expr SEMI => CompoundAssignStmt($1, $2.lexeme, $3)
+                        | AssignmentTarget SHREQ Expr SEMI => CompoundAssignStmt($1, $2.lexeme, $3);
 rule ReturnStmt -> KW_RETURN Expr SEMI => ReturnStmt($2);
 rule ExprStmt -> Expr SEMI => ExprStmt($1);
 rule IfStmt -> KW_IF LPAREN Expr RPAREN Block => cpp `
@@ -159,22 +261,82 @@ rule ForStmt -> KW_FOR LPAREN ForInit SEMI Expr SEMI ForInit RPAREN Block => cpp
 auto body = TakeASTChildAs<StatementList>(node, 9);
 return std::make_unique<ForStmt>(TakeASTChildAs<ForInit>(node, 3), TakeASTChildAs<Expr>(node, 5), TakeASTChildAs<ForInit>(node, 7), std::move(body->statements()));
 `;
+rule SwitchStmt -> KW_SWITCH LPAREN Expr RPAREN LBRACE SwitchCaseList RBRACE => cpp `
+std::vector<std::unique_ptr<Statement>> default_body;
+auto cases = TakeASTChildAs<SwitchCaseList>(node, 6);
+return std::make_unique<SwitchStmt>(TakeASTChildAs<Expr>(node, 3), std::move(cases->cases()), std::move(default_body));
+`
+                | KW_SWITCH LPAREN Expr RPAREN LBRACE SwitchCaseList KW_DEFAULT COLON Block RBRACE => cpp `
+auto cases = TakeASTChildAs<SwitchCaseList>(node, 6);
+auto default_body = TakeASTChildAs<StatementList>(node, 9);
+return std::make_unique<SwitchStmt>(TakeASTChildAs<Expr>(node, 3), std::move(cases->cases()), std::move(default_body->statements()));
+`;
+
+rule SwitchCaseList -> SwitchCase => cpp `
+std::vector<std::unique_ptr<SwitchCase>> cases;
+cases.push_back(TakeASTChildAs<SwitchCase>(node, 1));
+return std::make_unique<SwitchCaseList>(std::move(cases));
+`
+                   | SwitchCaseList SwitchCase => cpp `
+auto cases = TakeASTChildAs<SwitchCaseList>(node, 1);
+cases->cases().push_back(TakeASTChildAs<SwitchCase>(node, 2));
+return cases;
+`;
+
+rule SwitchCase -> KW_CASE Expr COLON Block => cpp `
+auto body = TakeASTChildAs<StatementList>(node, 4);
+return std::make_unique<SwitchCase>(TakeASTChildAs<Expr>(node, 2), std::move(body->statements()));
+`;
 
 rule ForInit -> KW_LET ID EQUAL Expr => ForInitLet($2.lexeme, $4)
+             | AssignmentTarget EQUAL Expr => ForInitAssign($1, $3)
+             | AssignmentTarget PLUSEQ Expr => ForInitCompound($1, $2.lexeme, $3)
+             | AssignmentTarget MINUSEQ Expr => ForInitCompound($1, $2.lexeme, $3)
+             | AssignmentTarget STAREQ Expr => ForInitCompound($1, $2.lexeme, $3)
+             | AssignmentTarget SLASHEQ Expr => ForInitCompound($1, $2.lexeme, $3)
+             | AssignmentTarget MODEQ Expr => ForInitCompound($1, $2.lexeme, $3)
+             | AssignmentTarget ANDEQ Expr => ForInitCompound($1, $2.lexeme, $3)
+             | AssignmentTarget OREQ Expr => ForInitCompound($1, $2.lexeme, $3)
+             | AssignmentTarget CARETEQ Expr => ForInitCompound($1, $2.lexeme, $3)
+             | AssignmentTarget SHLEQ Expr => ForInitCompound($1, $2.lexeme, $3)
+             | AssignmentTarget SHREQ Expr => ForInitCompound($1, $2.lexeme, $3)
              | Expr => ForInitExpr($1);
+
+rule AssignmentTarget -> Postfix => Pass($1);
 
 rule Expr -> Ternary => Pass($1);
 
-rule Ternary -> Comparison QMARK Expr COLON Ternary => Ternary($1, $3, $5)
-              | Comparison => Pass($1);
+rule Ternary -> LogicalOr QMARK Expr COLON Ternary => Ternary($1, $3, $5)
+              | LogicalOr => Pass($1);
 
-rule Comparison -> Additive EQEQ Additive => Equal($1, $3)
-                | Additive NEQ Additive => NotEqual($1, $3)
-                | Additive LT Additive => Less($1, $3)
-                | Additive LTE Additive => LessEqual($1, $3)
-                | Additive GT Additive => Greater($1, $3)
-                | Additive GTE Additive => GreaterEqual($1, $3)
-                | Additive => Pass($1);
+rule LogicalOr -> LogicalOr LOR LogicalAnd => LogicalOr($1, $3)
+               | LogicalAnd => Pass($1);
+
+rule LogicalAnd -> LogicalAnd LAND BitwiseOr => LogicalAnd($1, $3)
+                | BitwiseOr => Pass($1);
+
+rule BitwiseOr -> BitwiseOr PIPE BitwiseXor => BitwiseOr($1, $3)
+               | BitwiseXor => Pass($1);
+
+rule BitwiseXor -> BitwiseXor CARET BitwiseAnd => BitwiseXor($1, $3)
+                | BitwiseAnd => Pass($1);
+
+rule BitwiseAnd -> BitwiseAnd AMP Equality => BitwiseAnd($1, $3)
+                | Equality => Pass($1);
+
+rule Equality -> Equality EQEQ Relational => Equal($1, $3)
+               | Equality NEQ Relational => NotEqual($1, $3)
+               | Relational => Pass($1);
+
+rule Relational -> Relational LT Shift => Less($1, $3)
+                 | Relational LTE Shift => LessEqual($1, $3)
+                 | Relational GT Shift => Greater($1, $3)
+                 | Relational GTE Shift => GreaterEqual($1, $3)
+                 | Shift => Pass($1);
+
+rule Shift -> Shift SHL Additive => ShiftLeft($1, $3)
+            | Shift SHR Additive => ShiftRight($1, $3)
+            | Additive => Pass($1);
 
 rule Additive -> Additive PLUS Term => Add($1, $3)
               | Additive MINUS Term => Subtract($1, $3)
@@ -182,15 +344,31 @@ rule Additive -> Additive PLUS Term => Add($1, $3)
 
 rule Term -> Term STAR Power => Multiply($1, $3)
           | Term SLASH Power => Divide($1, $3)
+          | Term MOD Power => Modulo($1, $3)
           | Power => Pass($1);
 
-rule Power -> Unary CARET Power => Pow($1, $3)
+rule Power -> Unary POW Power => Pow($1, $3)
            | Unary => Pass($1);
 
 rule Unary -> MINUS Unary => Negate($2)
-           | Primary => Pass($1);
+           | BANG Unary => LogicalNot($2)
+           | TILDE Unary => BitwiseNot($2)
+           | Postfix => Pass($1);
+
+rule Postfix -> Primary => Pass($1)
+             | Postfix DOT ID LPAREN RPAREN => cpp `
+std::vector<std::unique_ptr<Expr>> args;
+return std::make_unique<MethodCall>(TakeASTChildAs<Expr>(node, 1), TakeLexemeChild(node, 3), std::move(args));
+`
+             | Postfix DOT ID LPAREN ArgList RPAREN => cpp `
+auto args = TakeASTChildAs<ArgList>(node, 5);
+return std::make_unique<MethodCall>(TakeASTChildAs<Expr>(node, 1), TakeLexemeChild(node, 3), std::move(args->args()));
+`
+             | Postfix LBRACKET Expr RBRACKET => IndexAccess($1, $3)
+             | Postfix DOT ID => MemberAccess($1, $3.lexeme);
 
 rule Primary -> NUMBER => Number($1.lexeme)
+             | FSTRING => FormattedString($1.lexeme)
              | STRING => StringLiteral($1.lexeme)
              | CHAR => CharLiteral($1.lexeme)
              | KW_TRUE => BoolLiteral($1.lexeme)
@@ -203,6 +381,14 @@ return std::make_unique<Call>(TakeLexemeChild(node, 1), std::move(args));
              | ID LPAREN ArgList RPAREN => cpp `
 auto args = TakeASTChildAs<ArgList>(node, 3);
 return std::make_unique<Call>(TakeLexemeChild(node, 1), std::move(args->args()));
+`
+             | LBRACKET RBRACKET => cpp `
+std::vector<std::unique_ptr<Expr>> elements;
+return std::make_unique<ArrayLiteral>(std::move(elements));
+`
+             | LBRACKET ArgList RBRACKET => cpp `
+auto elements = TakeASTChildAs<ArgList>(node, 2);
+return std::make_unique<ArrayLiteral>(std::move(elements->args()));
 `
              | LPAREN Expr RPAREN => Pass($2);
 

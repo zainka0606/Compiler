@@ -1,0 +1,64 @@
+// Real-valued math helpers.
+
+fn radians(deg) {
+  return deg * pi / 180;
+}
+
+fn degrees(rad) {
+  return rad * 180 / pi;
+}
+
+fn factorial(n) {
+  if (n < 0) {
+    return 0;
+  }
+  let out = 1;
+  for (let i = 2; i <= n; i = i + 1) {
+    out = out * i;
+  }
+  return out;
+}
+
+fn gcd(a, b) {
+  let x = abs(a);
+  let y = abs(b);
+  while (y != 0) {
+    let next = x % y;
+    x = y;
+    y = next;
+  }
+  return x;
+}
+
+fn lcm(a, b) {
+  if (a == 0 || b == 0) {
+    return 0;
+  }
+  return abs(a * b) / gcd(a, b);
+}
+
+fn sinh(x) {
+  return (exp(x) - exp(-x)) / 2;
+}
+
+fn cosh(x) {
+  return (exp(x) + exp(-x)) / 2;
+}
+
+fn tanh(x) {
+  let e2 = exp(2 * x);
+  return (e2 - 1) / (e2 + 1);
+}
+
+fn hypot2(x, y) {
+  return sqrt(x * x + y * y);
+}
+
+fn smoothstep01(x) {
+  let t = clamp(x, 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
+fn sigmoid(x) {
+  return 1 / (1 + exp(-x));
+}

@@ -1,2 +1,2 @@
 #!/bin/bash
-export PATH="$(pwd)/cmake-build-debug/bin:$PATH"
+export PATH="$(pwd)/cmake-build-release/bin:$PATH"

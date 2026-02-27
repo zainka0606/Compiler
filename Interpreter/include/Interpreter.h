@@ -2,12 +2,13 @@
 
 #include "AST.h"
 #include "CFG.h"
+#include "SymbolTable.h"
 
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -18,11 +19,6 @@ class InterpreterException : public std::runtime_error {
     using std::runtime_error::runtime_error;
 };
 
-struct SymbolTable {
-    std::unordered_set<std::string> functions;
-    std::unordered_set<std::string> globals;
-};
-
 struct ProgramAnnotation {
     std::vector<std::string> flattened_items;
     SymbolTable symbols;
@@ -30,9 +26,24 @@ struct ProgramAnnotation {
         function_parameters;
     std::unordered_map<std::string, std::vector<std::string>>
         function_statements;
+    std::unordered_map<std::string, std::vector<std::string>> class_fields;
+    std::unordered_map<std::string, std::vector<std::string>> class_methods;
 };
 
-using Value = std::variant<std::monostate, double, std::string, bool, char>;
+struct ObjectInstance;
+struct ArrayInstance;
+using ObjectInstancePtr = std::shared_ptr<ObjectInstance>;
+using ArrayInstancePtr = std::shared_ptr<ArrayInstance>;
+using Value = std::variant<std::monostate, double, std::string, bool, char, ObjectInstancePtr, ArrayInstancePtr>;
+
+struct ObjectInstance {
+    std::string class_name;
+    std::unordered_map<std::string, Value> fields;
+};
+
+struct ArrayInstance {
+    std::vector<Value> elements;
+};
 
 std::string ValueToString(const Value &value);
 

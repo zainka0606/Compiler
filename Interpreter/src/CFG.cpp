@@ -30,6 +30,10 @@ std::string DescribeExpr(const gen::Expr &expr) {
     if (const auto *number = dynamic_cast<const gen::Number *>(&expr)) {
         return "num(" + number->value() + ")";
     }
+    if (const auto *formatted_string =
+            dynamic_cast<const gen::FormattedString *>(&expr)) {
+        return "fstr(" + formatted_string->value() + ")";
+    }
     if (const auto *string_literal =
             dynamic_cast<const gen::StringLiteral *>(&expr)) {
         return "str(" + string_literal->value() + ")";
@@ -57,11 +61,41 @@ std::string DescribeExpr(const gen::Expr &expr) {
     if (dynamic_cast<const gen::Divide *>(&expr) != nullptr) {
         return "div";
     }
+    if (dynamic_cast<const gen::Modulo *>(&expr) != nullptr) {
+        return "mod";
+    }
     if (dynamic_cast<const gen::Pow *>(&expr) != nullptr) {
         return "pow";
     }
     if (dynamic_cast<const gen::Negate *>(&expr) != nullptr) {
         return "neg";
+    }
+    if (dynamic_cast<const gen::LogicalNot *>(&expr) != nullptr) {
+        return "not";
+    }
+    if (dynamic_cast<const gen::BitwiseNot *>(&expr) != nullptr) {
+        return "bnot";
+    }
+    if (dynamic_cast<const gen::LogicalAnd *>(&expr) != nullptr) {
+        return "land";
+    }
+    if (dynamic_cast<const gen::LogicalOr *>(&expr) != nullptr) {
+        return "lor";
+    }
+    if (dynamic_cast<const gen::BitwiseAnd *>(&expr) != nullptr) {
+        return "band";
+    }
+    if (dynamic_cast<const gen::BitwiseOr *>(&expr) != nullptr) {
+        return "bor";
+    }
+    if (dynamic_cast<const gen::BitwiseXor *>(&expr) != nullptr) {
+        return "bxor";
+    }
+    if (dynamic_cast<const gen::ShiftLeft *>(&expr) != nullptr) {
+        return "shl";
+    }
+    if (dynamic_cast<const gen::ShiftRight *>(&expr) != nullptr) {
+        return "shr";
     }
     if (dynamic_cast<const gen::Equal *>(&expr) != nullptr) {
         return "eq";
@@ -87,6 +121,19 @@ std::string DescribeExpr(const gen::Expr &expr) {
     if (const auto *call = dynamic_cast<const gen::Call *>(&expr)) {
         return "call(" + call->name() + ")";
     }
+    if (const auto *array_literal =
+            dynamic_cast<const gen::ArrayLiteral *>(&expr)) {
+        return "array[" + std::to_string(array_literal->elements().size()) + "]";
+    }
+    if (const auto *method_call = dynamic_cast<const gen::MethodCall *>(&expr)) {
+        return "call(" + DescribeExpr(method_call->object()) + "." + method_call->name() + ")";
+    }
+    if (const auto *index = dynamic_cast<const gen::IndexAccess *>(&expr)) {
+        return "index(" + DescribeExpr(index->object()) + ")";
+    }
+    if (const auto *member = dynamic_cast<const gen::MemberAccess *>(&expr)) {
+        return "member(" + DescribeExpr(member->object()) + "." + member->member() + ")";
+    }
     return "expr";
 }
 
@@ -94,6 +141,14 @@ std::string DescribeForInit(const gen::ForInit &init) {
     if (const auto *let_init = dynamic_cast<const gen::ForInitLet *>(&init)) {
         return "let " + let_init->name() + " = " +
                DescribeExpr(let_init->expr());
+    }
+    if (const auto *assign_init = dynamic_cast<const gen::ForInitAssign *>(&init)) {
+        return "assign " + DescribeExpr(assign_init->target()) + " = " +
+               DescribeExpr(assign_init->expr());
+    }
+    if (const auto *compound_init = dynamic_cast<const gen::ForInitCompound *>(&init)) {
+        return "assign " + DescribeExpr(compound_init->target()) + " " +
+               compound_init->op() + " " + DescribeExpr(compound_init->expr());
     }
     if (const auto *expr_init = dynamic_cast<const gen::ForInitExpr *>(&init)) {
         return DescribeExpr(expr_init->expr());
@@ -104,6 +159,13 @@ std::string DescribeForInit(const gen::ForInit &init) {
 std::string DescribeStatementNode(const gen::Statement &statement) {
     if (const auto *let_stmt = dynamic_cast<const gen::LetStmt *>(&statement)) {
         return "let " + let_stmt->name();
+    }
+    if (const auto *assign_stmt = dynamic_cast<const gen::AssignStmt *>(&statement)) {
+        return "assign " + DescribeExpr(assign_stmt->target());
+    }
+    if (const auto *compound_stmt = dynamic_cast<const gen::CompoundAssignStmt *>(&statement)) {
+        return "assign " + DescribeExpr(compound_stmt->target()) + " " +
+               compound_stmt->op();
     }
     if (dynamic_cast<const gen::ReturnStmt *>(&statement) != nullptr) {
         return "return";
@@ -121,6 +183,9 @@ std::string DescribeStatementNode(const gen::Statement &statement) {
     }
     if (const auto *for_stmt = dynamic_cast<const gen::ForStmt *>(&statement)) {
         return "for " + DescribeExpr(for_stmt->condition());
+    }
+    if (const auto *switch_stmt = dynamic_cast<const gen::SwitchStmt *>(&statement)) {
+        return "switch " + DescribeExpr(switch_stmt->condition());
     }
     return "stmt";
 }
@@ -192,6 +257,8 @@ class CFGBuilder {
         }
 
         if (dynamic_cast<const gen::LetStmt *>(&statement) != nullptr ||
+            dynamic_cast<const gen::AssignStmt *>(&statement) != nullptr ||
+            dynamic_cast<const gen::CompoundAssignStmt *>(&statement) != nullptr ||
             dynamic_cast<const gen::ExprStmt *>(&statement) != nullptr) {
             return {statement_node};
         }
@@ -283,6 +350,46 @@ class CFGBuilder {
             const std::size_t for_end = AddNode("for_end");
             AddEdge(cond_node, for_end, "F");
             return {for_end};
+        }
+
+        if (const auto *switch_stmt =
+                dynamic_cast<const gen::SwitchStmt *>(&statement)) {
+            std::vector<std::size_t> exits;
+            for (std::size_t i = 0; i < switch_stmt->cases().size(); ++i) {
+                const std::unique_ptr<gen::SwitchCase> &switch_case =
+                    switch_stmt->cases()[i];
+                if (!switch_case) {
+                    continue;
+                }
+                const std::size_t case_entry =
+                    AddNode("case " + DescribeExpr(switch_case->match()));
+                AddEdge(statement_node, case_entry, "case");
+                std::vector<std::size_t> case_exits =
+                    BuildStatementList(ToStatementPointers(switch_case->body()),
+                                       {case_entry}, function_exit_id);
+                exits.insert(exits.end(), case_exits.begin(), case_exits.end());
+            }
+
+            if (!switch_stmt->default_body().empty()) {
+                const std::size_t default_entry = AddNode("default");
+                AddEdge(statement_node, default_entry, "default");
+                std::vector<std::size_t> default_exits =
+                    BuildStatementList(ToStatementPointers(switch_stmt->default_body()),
+                                       {default_entry}, function_exit_id);
+                exits.insert(exits.end(), default_exits.begin(), default_exits.end());
+            }
+
+            if (exits.empty()) {
+                return {statement_node};
+            }
+            if (exits.size() == 1) {
+                return exits;
+            }
+            const std::size_t merge_node = AddNode("switch_end");
+            for (const std::size_t exit : exits) {
+                AddEdge(exit, merge_node);
+            }
+            return {merge_node};
         }
 
         return {statement_node};

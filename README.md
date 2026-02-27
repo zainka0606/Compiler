@@ -21,6 +21,7 @@ This repository is a multi-stage compiler/tooling playground with:
 - `ParserGenerator` - stage-2 generator (typed AST, inline C++ rule actions)
 - `Parser` - parser module built from `ParserGenerator`
 - `Interpreter` - parser+runtime module with REPL/file mode and CFG generation
+- `Examples` - source programs written in the interpreter language
 - `ExampleLexer`, `ExampleLR0Parser`, `ExampleSLRParser`, `ExampleLR1Parser`, `ExampleLR1Calculator`,
   `ExampleCalculator` - runnable reference modules
 
@@ -114,26 +115,36 @@ In file mode it writes:
 
 - literals: number, string, character, boolean
 - expressions:
-    - arithmetic: `+ - * / ^`
+    - arithmetic: `+ - * / % **`
+    - bitwise: `& | ^ ~ << >>`
+    - logical: `&& || !`
     - comparisons: `== != < <= > >=`
     - ternary: `cond ? a : b`
+    - indexing: `value[index]` (arrays and strings)
     - function calls
 - statements:
     - `let`
+    - assignment: `=`, `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`
     - expression statement
     - `return`
     - `if / else`
     - `while`
     - `for (init; condition; update)`
+    - `switch / case / default`
 - user-defined functions
 - builtin math functions: `sin`, `cos`, `tan`, `sqrt`, `abs`, `exp`, `ln`, `log10`, `pow`, `min`, `max`, `sum`
-- builtin IO functions: `print`, `println`, `readln`, `input`
+- builtin IO/functions: `print`, `println`, `readln`, `input`, `read_file`, `write_file`, `append_file`, `file_exists`, `file_size`
+- builtin collection helpers: `len`, `push`, `pop`
 
 ### Interpreter sample run target
 
 ```bash
 cmake --build cmake-build-debug --target InterpreterAstTestRun
 ```
+
+The interpreter sample target uses:
+
+- `Examples/Mandelbrot.txt`
 
 ## Example Targets
 
