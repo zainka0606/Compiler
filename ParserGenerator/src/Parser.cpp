@@ -19,13 +19,13 @@ namespace compiler::parsergen {
 
 namespace {
 
-using SpecLexer = compiler::parsergen::detail::Stage2SpecLexer;
-using SpecToken = compiler::parsergen::detail::Token;
-using SpecTokenKind = compiler::parsergen::detail::Stage2SpecTokenKind;
+using SpecLexer = detail::Stage2SpecLexer;
+using SpecToken = detail::Token;
+using SpecTokenKind = detail::Stage2SpecTokenKind;
 using SpecParser =
     generated::ParserGeneratorStage2Spec::ParserGeneratorStage2SpecParser;
 
-const char *TerminalNameForToken(SpecTokenKind kind) {
+const char *TerminalNameForToken(const SpecTokenKind kind) {
     switch (kind) {
     case SpecTokenKind::KW_GRAMMAR:
         return "KW_GRAMMAR";
@@ -109,9 +109,9 @@ ToGenericTokens(const std::vector<SpecToken> &tokens) {
 }
 
 bool MatchesReduction(const LR1ParseTable &parse_table, const CSTNode &node,
-                      std::string_view lhs,
-                      std::initializer_list<std::string_view> rhs) {
-    return compiler::parsergen::CSTNodeMatchesProduction(parse_table, node, lhs,
+                      const std::string_view lhs,
+                      const std::initializer_list<std::string_view> rhs) {
+    return CSTNodeMatchesProduction(parse_table, node, lhs,
                                                          rhs);
 }
 
@@ -134,7 +134,7 @@ std::size_t ParseOneBasedIndex(const CSTNode &int_token_node) {
                     std::numeric_limits<std::size_t>::max())) {
         throw BuildException("index literal out of range: " + text);
     }
-    return static_cast<std::size_t>(value);
+    return value;
 }
 
 ASTNodeTypeDecl::FieldDecl ParseFieldSpec(const CSTNode &node,
@@ -311,8 +311,8 @@ void FinalizeAstDeclFields(
     }
 }
 
-std::string DecodeEscapedText(std::string_view text,
-                              std::string_view context) {
+std::string DecodeEscapedText(const std::string_view text,
+                              const std::string_view context) {
     std::string out;
     out.reserve(text.size());
     for (std::size_t i = 0; i < text.size(); ++i) {
@@ -355,9 +355,10 @@ std::string DecodeEscapedText(std::string_view text,
     return out;
 }
 
-std::string ParseQuotedLiteral(std::string_view lexeme, char quote,
-                               std::string_view context) {
-    if (lexeme.size() < 2 || lexeme.front() != quote || lexeme.back() != quote) {
+std::string ParseQuotedLiteral(const std::string_view lexeme, const char quote,
+                               const std::string_view context) {
+    if (lexeme.size() < 2 || lexeme.front() != quote ||
+        lexeme.back() != quote) {
         throw BuildException("invalid " + std::string(context) + ": " +
                              std::string(lexeme));
     }
@@ -371,13 +372,14 @@ struct InlineCppPlaceholderRef {
     std::size_t end = 0;
 };
 
-bool IsAsciiDigit(char c) { return c >= '0' && c <= '9'; }
+bool IsAsciiDigit(const char c) { return c >= '0' && c <= '9'; }
 
-std::size_t ParseOneBasedIndexLiteral(std::string_view text,
-                                      std::string_view context) {
+std::size_t ParseOneBasedIndexLiteral(const std::string_view text,
+                                      const std::string_view context) {
     std::size_t value = 0;
     if (text.empty()) {
-        throw BuildException("missing index literal in " + std::string(context));
+        throw BuildException("missing index literal in " +
+                             std::string(context));
     }
     for (const char c : text) {
         if (!IsAsciiDigit(c)) {
@@ -385,8 +387,7 @@ std::size_t ParseOneBasedIndexLiteral(std::string_view text,
                                  "' in " + std::string(context));
         }
         const std::size_t digit = static_cast<std::size_t>(c - '0');
-        if (value >
-            (std::numeric_limits<std::size_t>::max() - digit) / 10u) {
+        if (value > (std::numeric_limits<std::size_t>::max() - digit) / 10u) {
             throw BuildException("index literal out of range in " +
                                  std::string(context) + ": " +
                                  std::string(text));
@@ -401,7 +402,7 @@ std::size_t ParseOneBasedIndexLiteral(std::string_view text,
 }
 
 std::vector<InlineCppPlaceholderRef>
-FindInlineCppPlaceholders(std::string_view code) {
+FindInlineCppPlaceholders(const std::string_view code) {
     enum class ScanState {
         Normal,
         LineComment,
@@ -495,7 +496,7 @@ FindInlineCppPlaceholders(std::string_view code) {
     return out;
 }
 
-std::uint64_t FNV1a64(std::string_view text) {
+std::uint64_t FNV1a64(const std::string_view text) {
     std::uint64_t hash = 14695981039346656037ull;
     for (const unsigned char c : text) {
         hash ^= c;
@@ -514,12 +515,13 @@ std::string Hex64(std::uint64_t value) {
     return out;
 }
 
-std::string MakeLiteralTerminalName(std::string_view literal_lexeme) {
+std::string MakeLiteralTerminalName(const std::string_view literal_lexeme) {
     return "__LIT_" + Hex64(FNV1a64(literal_lexeme));
 }
 
-void ReplaceTerminalSymbolInRules(Stage2SpecAST &spec, std::string_view from,
-                                  std::string_view to) {
+void ReplaceTerminalSymbolInRules(Stage2SpecAST &spec,
+                                  const std::string_view from,
+                                  const std::string_view to) {
     if (from == to) {
         return;
     }
@@ -547,7 +549,8 @@ void BindLiteralToExplicitTerminal(Stage2SpecAST &spec,
                                  decl.terminal_name + "'");
         }
         if (!decl.is_explicit && decl.terminal_name != terminal_name) {
-            ReplaceTerminalSymbolInRules(spec, decl.terminal_name, terminal_name);
+            ReplaceTerminalSymbolInRules(spec, decl.terminal_name,
+                                         terminal_name);
             decl.terminal_name = std::move(terminal_name);
         }
         decl.is_explicit = true;
@@ -571,7 +574,7 @@ std::string InternLiteralTerminal(Stage2SpecAST &spec, std::string lexeme) {
     const std::string base_name = MakeLiteralTerminalName(lexeme);
     std::string terminal_name = base_name;
     std::size_t suffix = 0;
-    auto name_is_used = [&](std::string_view candidate) {
+    auto name_is_used = [&](const std::string_view candidate) {
         for (const std::string &terminal : spec.terminals) {
             if (terminal == candidate) {
                 return true;
@@ -618,8 +621,8 @@ std::string ParseRuleSymbol(const CSTNode &node,
             ParseQuotedLiteral(ExpectTerminalLexeme(node.Child(0)), '\'',
                                "rule symbol character literal");
         if (literal.size() != 1) {
-            throw BuildException(
-                "character literal in rule symbol must decode to one character");
+            throw BuildException("character literal in rule symbol must decode "
+                                 "to one character");
         }
         return InternLiteralTerminal(spec, literal);
     }
@@ -764,8 +767,7 @@ RuleAlternative ParseRuleAlt(const CSTNode &node,
 }
 
 void AppendRuleAltList(const CSTNode &node, const LR1ParseTable &parse_table,
-                       Stage2SpecAST &spec,
-                       std::vector<RuleAlternative> &out) {
+                       Stage2SpecAST &spec, std::vector<RuleAlternative> &out) {
     if (node.Symbol() != "RuleAltList") {
         throw BuildException("expected RuleAltList node, got '" +
                              std::string(node.Symbol()) + "'");
@@ -812,14 +814,15 @@ std::string ParseTokenDeclLiteral(const CSTNode &token_decl_node,
                                   const LR1ParseTable &parse_table) {
     if (MatchesReduction(parse_table, token_decl_node, "TokenDecl",
                          {"KW_TOKEN", "IDENT", "EQUAL", "STRING", "SEMI"})) {
-        return ParseQuotedLiteral(ExpectTerminalLexeme(token_decl_node.Child(3)),
-                                  '"', "token string literal");
+        return ParseQuotedLiteral(
+            ExpectTerminalLexeme(token_decl_node.Child(3)), '"',
+            "token string literal");
     }
     if (MatchesReduction(parse_table, token_decl_node, "TokenDecl",
                          {"KW_TOKEN", "IDENT", "EQUAL", "CHAR", "SEMI"})) {
-        const std::string literal = ParseQuotedLiteral(
-            ExpectTerminalLexeme(token_decl_node.Child(3)), '\'',
-            "token character literal");
+        const std::string literal =
+            ParseQuotedLiteral(ExpectTerminalLexeme(token_decl_node.Child(3)),
+                               '\'', "token character literal");
         if (literal.size() != 1) {
             throw BuildException(
                 "character literal in token declaration must decode to one "
@@ -978,19 +981,16 @@ void ParseDecl(const CSTNode &node, const LR1ParseTable &parse_table,
 }
 
 void FinalizeImplicitLiteralTerminals(Stage2SpecAST &spec) {
-    std::unordered_set<std::string> explicit_terminals(spec.terminals.begin(),
+    std::unordered_set explicit_terminals(spec.terminals.begin(),
                                                        spec.terminals.end());
     for (const LiteralTerminalDecl &decl : spec.literal_terminals) {
         if (decl.is_explicit &&
-            explicit_terminals.find(decl.terminal_name) ==
-                explicit_terminals.end()) {
+            !explicit_terminals.contains(decl.terminal_name)) {
             throw BuildException("literal '" + decl.lexeme +
                                  "' is mapped to unknown explicit token '" +
                                  decl.terminal_name + "'");
         }
-        if (!decl.is_explicit &&
-            explicit_terminals.find(decl.terminal_name) !=
-                explicit_terminals.end()) {
+        if (!decl.is_explicit && explicit_terminals.contains(decl.terminal_name)) {
             throw BuildException(
                 "generated literal token name '" + decl.terminal_name +
                 "' for lexeme '" + decl.lexeme +
@@ -1051,7 +1051,7 @@ struct ValidationContext {
     std::unordered_map<std::string, const ASTNodeTypeDecl *> ast_types_by_name;
 };
 
-bool IsBuiltinAstFieldType(std::string_view type_name) {
+bool IsBuiltinAstFieldType(const std::string_view type_name) {
     return type_name == "string" || type_name == "text";
 }
 
@@ -1069,8 +1069,7 @@ ValidationContext BuildValidationContext(const Stage2SpecAST &spec) {
         }
     }
     for (const ASTNodeTypeDecl &node : spec.ast_node_types) {
-        if (ctx.ast_types_by_name.find(node.name) !=
-            ctx.ast_types_by_name.end()) {
+        if (ctx.ast_types_by_name.contains(node.name)) {
             throw BuildException("duplicate AST node type declaration: " +
                                  node.name);
         }
@@ -1109,7 +1108,7 @@ ValidationContext BuildValidationContext(const Stage2SpecAST &spec) {
     }
 
     for (const std::string &terminal : ctx.terminal_set) {
-        if (ctx.nonterminal_set.find(terminal) != ctx.nonterminal_set.end()) {
+        if (ctx.nonterminal_set.contains(terminal)) {
             throw BuildException("symbol declared as both token and rule: " +
                                  terminal);
         }
@@ -1139,8 +1138,7 @@ ValidationContext BuildValidationContext(const Stage2SpecAST &spec) {
             if (IsBuiltinAstFieldType(field.type_name)) {
                 continue;
             }
-            if (ctx.ast_types_by_name.find(field.type_name) ==
-                ctx.ast_types_by_name.end()) {
+            if (!ctx.ast_types_by_name.contains(field.type_name)) {
                 throw BuildException("unknown AST field type '" +
                                      field.type_name + "' for field '" +
                                      field.name + "' in AST type '" +
@@ -1251,14 +1249,14 @@ void ValidateRuleAlternative(const RuleAlternative &alt,
     }
 
     for (const std::string &symbol : alt.symbols) {
-        if (ctx.terminal_set.find(symbol) == ctx.terminal_set.end() &&
-            ctx.nonterminal_set.find(symbol) == ctx.nonterminal_set.end()) {
+        if (!ctx.terminal_set.contains(symbol) &&
+            !ctx.nonterminal_set.contains(symbol)) {
             throw BuildException("unknown symbol '" + symbol + "' in rule '" +
                                  lhs + "'");
         }
     }
 
-    const auto check_rhs_ref = [&](std::size_t rhs_index) {
+    const auto check_rhs_ref = [&](const std::size_t rhs_index) {
         if (rhs_index == 0 || rhs_index > alt.symbols.size()) {
             throw BuildException("action references out-of-range RHS index $" +
                                  std::to_string(rhs_index) + " in rule '" +
@@ -1281,18 +1279,17 @@ void ValidateRuleAlternative(const RuleAlternative &alt,
             check_rhs_ref(ref.rhs_index);
             const std::string &symbol = alt.symbols[ref.rhs_index - 1];
             const bool is_terminal =
-                (ctx.terminal_set.find(symbol) != ctx.terminal_set.end());
+                ctx.terminal_set.contains(symbol);
             if (ref.kind == ActionArgKind::ChildAST && is_terminal) {
-                throw BuildException(
-                    "inline cpp placeholder $" + std::to_string(ref.rhs_index) +
-                    " refers to terminal symbol '" + symbol +
-                    "'; use .lexeme instead");
-            }
-            if (ref.kind == ActionArgKind::ChildLexeme && !is_terminal) {
                 throw BuildException("inline cpp placeholder $" +
                                      std::to_string(ref.rhs_index) +
-                                     ".lexeme refers to nonterminal symbol '" +
-                                     symbol + "'");
+                                     " refers to terminal symbol '" + symbol +
+                                     "'; use .lexeme instead");
+            }
+            if (ref.kind == ActionArgKind::ChildLexeme && !is_terminal) {
+                throw BuildException(
+                    "inline cpp placeholder $" + std::to_string(ref.rhs_index) +
+                    ".lexeme refers to nonterminal symbol '" + symbol + "'");
             }
         }
         return;
@@ -1301,7 +1298,7 @@ void ValidateRuleAlternative(const RuleAlternative &alt,
     if (alt.action.kind == RuleActionKind::Pass) {
         check_rhs_ref(alt.action.pass_rhs_index);
         const std::string &symbol = alt.symbols[alt.action.pass_rhs_index - 1];
-        if (ctx.terminal_set.find(symbol) != ctx.terminal_set.end()) {
+        if (ctx.terminal_set.contains(symbol)) {
             throw BuildException("Pass($" +
                                  std::to_string(alt.action.pass_rhs_index) +
                                  ") cannot forward terminal symbol '" + symbol +
@@ -1334,7 +1331,7 @@ void ValidateRuleAlternative(const RuleAlternative &alt,
         check_rhs_ref(arg.rhs_index);
         const std::string &symbol = alt.symbols[arg.rhs_index - 1];
         const bool is_terminal =
-            (ctx.terminal_set.find(symbol) != ctx.terminal_set.end());
+            ctx.terminal_set.contains(symbol);
         if (arg.kind == ActionArgKind::ChildAST && is_terminal) {
             throw BuildException("action argument $" +
                                  std::to_string(arg.rhs_index) +
@@ -1393,7 +1390,7 @@ const RuleAlternative &RuleAlternativeForNode(const Stage2SpecAST &spec,
                                               const LR1ParseTable &parse_table,
                                               const CSTNode &node) {
     const FlattenedProduction &production =
-        compiler::parsergen::GetCSTReductionProduction(parse_table, node);
+        GetCSTReductionProduction(parse_table, node);
     if (production.source_rule_index >= spec.rules.size()) {
         throw BuildException("CST reduction has invalid source rule index");
     }
@@ -1406,7 +1403,7 @@ const RuleAlternative &RuleAlternativeForNode(const Stage2SpecAST &spec,
 }
 
 const ASTNodeTypeDecl &FindASTNodeType(const Stage2SpecAST &spec,
-                                       std::string_view name) {
+                                       const std::string_view name) {
     for (const ASTNodeTypeDecl &decl : spec.ast_node_types) {
         if (decl.name == name) {
             return decl;
@@ -1496,13 +1493,13 @@ std::size_t EmitGeneratedASTGraphvizNode(const GeneratedASTNode &node,
         label += field.value;
     }
     out << "  n" << id << " [label=\""
-        << compiler::common::EscapeGraphvizLabel(label) << "\"];\n";
+        << common::EscapeGraphvizLabel(label) << "\"];\n";
 
     for (const GeneratedASTNodeChildField &child_field : node.ChildFields()) {
         const std::size_t child_id =
             EmitGeneratedASTGraphvizNode(*child_field.value, out, next_id);
         out << "  n" << id << " -> n" << child_id << " [label=\""
-            << compiler::common::EscapeGraphvizLabel(child_field.name)
+            << common::EscapeGraphvizLabel(child_field.name)
             << "\"];\n";
     }
 
@@ -1515,7 +1512,7 @@ std::size_t GeneratedASTNode::ChildCount() const {
     return ChildFields().size();
 }
 
-const GeneratedASTNode &GeneratedASTNode::Child(std::size_t index) const {
+const GeneratedASTNode &GeneratedASTNode::Child(const std::size_t index) const {
     const auto &fields = ChildFields();
     if (index >= fields.size() || fields[index].value == nullptr) {
         throw std::out_of_range("GeneratedAST child index out of range");
@@ -1557,7 +1554,7 @@ GeneratedASTNode &GeneratedAST::Root() {
     return *root;
 }
 
-Stage2SpecAST ParseStage2Spec(std::string_view source_text) {
+Stage2SpecAST ParseStage2Spec(const std::string_view source_text) {
     try {
         SpecLexer lexer(source_text);
         const std::vector<SpecToken> tokens = lexer.Tokenize();
@@ -1577,11 +1574,11 @@ Stage2SpecAST ParseStage2Spec(std::string_view source_text) {
         FinalizeImplicitLiteralTerminals(spec);
         ValidateStage2Spec(spec);
         return spec;
-    } catch (const compiler::parsergen::ParseException &) {
+    } catch (const ParseException &) {
         throw;
-    } catch (const compiler::parsergen::BuildException &) {
+    } catch (const BuildException &) {
         throw;
-    } catch (const compiler::parsergen::CSTParseException &ex) {
+    } catch (const CSTParseException &ex) {
         throw BuildException(std::string("failed to parse stage2 spec CST: ") +
                              ex.what());
     }
@@ -1599,8 +1596,7 @@ void ValidateStage2Spec(const Stage2SpecAST &spec) {
     }
 
     const ValidationContext ctx = BuildValidationContext(spec);
-    if (ctx.nonterminal_set.find(spec.start_symbol) ==
-        ctx.nonterminal_set.end()) {
+    if (!ctx.nonterminal_set.contains(spec.start_symbol)) {
         throw BuildException("start symbol has no rule: " + spec.start_symbol);
     }
 
@@ -1628,11 +1624,11 @@ GrammarSpecAST ToBaseGrammarSpec(const Stage2SpecAST &spec) {
     out.rules.reserve(spec.rules.size());
 
     for (const RuleDefinition &rule : spec.rules) {
-        compiler::parsergen::ProductionRule base_rule;
+        ProductionRule base_rule;
         base_rule.lhs = rule.lhs;
         base_rule.alternatives.reserve(rule.alternatives.size());
         for (const RuleAlternative &alt : rule.alternatives) {
-            compiler::parsergen::ProductionAlternative base_alt;
+            ProductionAlternative base_alt;
             base_alt.symbols = alt.symbols;
             base_rule.alternatives.push_back(std::move(base_alt));
         }
@@ -1643,15 +1639,15 @@ GrammarSpecAST ToBaseGrammarSpec(const Stage2SpecAST &spec) {
 }
 
 LR1CanonicalCollection BuildLR1CanonicalCollection(const Stage2SpecAST &spec) {
-    return compiler::parsergen::BuildLR1CanonicalCollection(
+    return parsergen::BuildLR1CanonicalCollection(
         ToBaseGrammarSpec(spec));
 }
 
 LR1ParseTable BuildLR1ParseTable(const Stage2SpecAST &spec) {
-    return compiler::parsergen::BuildLR1ParseTable(ToBaseGrammarSpec(spec));
+    return parsergen::BuildLR1ParseTable(ToBaseGrammarSpec(spec));
 }
 
-LR1ParseTable BuildLR1ParseTableFromStage2Spec(std::string_view source_text) {
+LR1ParseTable BuildLR1ParseTableFromStage2Spec(const std::string_view source_text) {
     const Stage2SpecAST spec = ParseStage2Spec(source_text);
     return BuildLR1ParseTable(spec);
 }
@@ -1660,15 +1656,15 @@ std::string Stage2SpecASTToGraphvizDot(const Stage2SpecAST &spec,
                                        std::string_view graph_name) {
     std::ostringstream out;
     out << "digraph "
-        << compiler::common::SanitizeIdentifier(
+        << common::SanitizeIdentifier(
                graph_name, "parser_generator_stage2_spec_ast")
         << " {\n";
     out << "  rankdir=TB;\n";
     out << "  node [shape=box];\n";
     out << "  root [label=\"Spec\\ngrammar="
-        << compiler::common::EscapeGraphvizLabel(spec.grammar_name)
+        << common::EscapeGraphvizLabel(spec.grammar_name)
         << "\\nstart="
-        << compiler::common::EscapeGraphvizLabel(spec.start_symbol) << "\"];\n";
+        << common::EscapeGraphvizLabel(spec.start_symbol) << "\"];\n";
 
     std::size_t next_id = 0;
 
@@ -1676,7 +1672,7 @@ std::string Stage2SpecASTToGraphvizDot(const Stage2SpecAST &spec,
     out << "  root -> tokens;\n";
     for (const std::string &token : spec.terminals) {
         out << "  t" << next_id << " [label=\""
-            << compiler::common::EscapeGraphvizLabel(token) << "\"];\n";
+            << common::EscapeGraphvizLabel(token) << "\"];\n";
         out << "  tokens -> t" << next_id << ";\n";
         ++next_id;
     }
@@ -1685,10 +1681,9 @@ std::string Stage2SpecASTToGraphvizDot(const Stage2SpecAST &spec,
         out << "  root -> lit_tokens;\n";
         for (const LiteralTerminalDecl &literal : spec.literal_terminals) {
             out << "  lt" << next_id << " [label=\""
-                << compiler::common::EscapeGraphvizLabel(
+                << common::EscapeGraphvizLabel(
                        literal.terminal_name + " = " + literal.lexeme +
-                       (literal.is_explicit ? " (explicit)"
-                                            : " (implicit)"))
+                       (literal.is_explicit ? " (explicit)" : " (implicit)"))
                 << "\"];\n";
             out << "  lit_tokens -> lt" << next_id << ";\n";
             ++next_id;
@@ -1710,7 +1705,7 @@ std::string Stage2SpecASTToGraphvizDot(const Stage2SpecAST &spec,
                     label << ", ";
                 }
                 const ASTNodeTypeDecl::FieldDecl *field_decl =
-                    (i < decl.field_decls.size()) ? &decl.field_decls[i]
+                    i < decl.field_decls.size() ? &decl.field_decls[i]
                                                   : nullptr;
                 label << decl.fields[i];
                 if (field_decl != nullptr && !field_decl->type_name.empty()) {
@@ -1735,7 +1730,7 @@ std::string Stage2SpecASTToGraphvizDot(const Stage2SpecAST &spec,
                   << impl.return_type_name;
         }
         out << "  a" << next_id << " [label=\""
-            << compiler::common::EscapeGraphvizLabel(label.str()) << "\"];\n";
+            << common::EscapeGraphvizLabel(label.str()) << "\"];\n";
         out << "  astdecls -> a" << next_id << ";\n";
         ++next_id;
     }
@@ -1745,7 +1740,7 @@ std::string Stage2SpecASTToGraphvizDot(const Stage2SpecAST &spec,
     for (const RuleDefinition &rule : spec.rules) {
         const std::size_t rule_id = next_id++;
         out << "  r" << rule_id << " [label=\"rule "
-            << compiler::common::EscapeGraphvizLabel(rule.lhs) << "\"];\n";
+            << common::EscapeGraphvizLabel(rule.lhs) << "\"];\n";
         out << "  rules -> r" << rule_id << ";\n";
         for (const RuleAlternative &alt : rule.alternatives) {
             std::ostringstream label;
@@ -1761,7 +1756,7 @@ std::string Stage2SpecASTToGraphvizDot(const Stage2SpecAST &spec,
             }
             const std::size_t alt_id = next_id++;
             out << "  ralt" << alt_id << " [label=\""
-                << compiler::common::EscapeGraphvizLabel(label.str())
+                << common::EscapeGraphvizLabel(label.str())
                 << "\"];\n";
             out << "  r" << rule_id << " -> ralt" << alt_id << ";\n";
         }
@@ -1773,14 +1768,14 @@ std::string Stage2SpecASTToGraphvizDot(const Stage2SpecAST &spec,
 
 std::string
 LR1CanonicalCollectionToGraphvizDot(const LR1CanonicalCollection &collection,
-                                    std::string_view graph_name) {
-    return compiler::parsergen1::LR1CanonicalCollectionToGraphvizDot(
+                                    const std::string_view graph_name) {
+    return parsergen1::LR1CanonicalCollectionToGraphvizDot(
         collection, graph_name);
 }
 
 std::string LR1ParseTableToGraphvizDot(const LR1ParseTable &table,
-                                       std::string_view graph_name) {
-    return compiler::parsergen1::LR1ParseTableToGraphvizDot(table, graph_name);
+                                       const std::string_view graph_name) {
+    return parsergen1::LR1ParseTableToGraphvizDot(table, graph_name);
 }
 
 GeneratedAST BuildGeneratedASTFromCST(const CST &cst,
@@ -1800,13 +1795,13 @@ GeneratedAST BuildGeneratedASTFromCST(const CST &cst,
 }
 
 std::string GeneratedASTToGraphvizDot(const GeneratedAST &ast,
-                                      std::string_view graph_name) {
+                                      const std::string_view graph_name) {
     if (ast.Empty()) {
         throw BuildException("cannot render empty generated AST");
     }
 
     std::ostringstream out;
-    out << "digraph " << compiler::common::SanitizeIdentifier(graph_name, "ast")
+    out << "digraph " << common::SanitizeIdentifier(graph_name, "ast")
         << " {\n";
     out << "  rankdir=TB;\n";
     out << "  node [shape=box];\n";

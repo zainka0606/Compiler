@@ -1,0 +1,45 @@
+# Mandelbrot renderer using the startup standard library.
+# Uses stdlib Complex plus a local escape routine and string palette.
+
+let ASCII = " .:-=+*#%@@";
+
+fn Pixel(iter, max_iter) {
+  let last = len(ASCII) - 1;
+  if (iter >= max_iter) {
+    return ASCII[last];
+  }
+  let idx = iter * last // max_iter;
+  return ASCII[idx];
+}
+
+fn complexMandelbrotEscape(c, max_iter) {
+  let z = new Complex(0, 0);
+  let iter = 0;
+  while (iter < max_iter && z.abs2() <= 4) {
+    z = z * z + c;
+    iter += 1;
+  }
+  return iter;
+}
+
+fn RenderMandelbrot() {
+  let max_iter = 0x30;
+  let width = 0x4F;
+  let half_w = width // 2;
+  let x_scale = 0x1E;
+  let y_scale = 0x0C;
+
+  for (let yi = -12; yi <= 12; yi += 1) {
+    let line = "";
+    for (let xi = -half_w; xi <= half_w; xi += 1) {
+      let c = new Complex(xi / x_scale - (3 / 4), yi / y_scale);
+      let iter = complexMandelbrotEscape(c, max_iter);
+      line = stringConcat(line, Pixel(iter, max_iter));
+    }
+    println(line);
+  }
+
+  return "done";
+}
+
+RenderMandelbrot();

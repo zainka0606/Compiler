@@ -21,13 +21,14 @@ using compiler::regex::ParseException;
 
 void Fail(std::string message) { throw std::runtime_error(std::move(message)); }
 
-void ExpectTrue(bool condition, std::string_view message) {
+void ExpectTrue(const bool condition, const std::string_view message) {
     if (!condition) {
         Fail(std::string(message));
     }
 }
 
-void ExpectDFAMatch(std::string_view pattern, std::string_view input) {
+void ExpectDFAMatch(const std::string_view pattern,
+                    const std::string_view input) {
     const DFA dfa = CompilePatternToDFA(pattern);
     if (!DFAMatches(dfa, input)) {
         std::ostringstream oss;
@@ -37,7 +38,8 @@ void ExpectDFAMatch(std::string_view pattern, std::string_view input) {
     }
 }
 
-void ExpectDFANoMatch(std::string_view pattern, std::string_view input) {
+void ExpectDFANoMatch(const std::string_view pattern,
+                      const std::string_view input) {
     const DFA dfa = CompilePatternToDFA(pattern);
     if (DFAMatches(dfa, input)) {
         std::ostringstream oss;
@@ -47,7 +49,7 @@ void ExpectDFANoMatch(std::string_view pattern, std::string_view input) {
     }
 }
 
-void ExpectInvalidPattern(std::string_view pattern) {
+void ExpectInvalidPattern(const std::string_view pattern) {
     try {
         (void)CompilePatternToDFA(pattern);
         Fail(std::string("expected parse failure for pattern '") +
@@ -57,7 +59,7 @@ void ExpectInvalidPattern(std::string_view pattern) {
     }
 }
 
-void ExpectNFADFAParity(std::string_view pattern,
+void ExpectNFADFAParity(const std::string_view pattern,
                         const std::vector<std::string_view> &inputs) {
     const NFA nfa = CompilePatternToNFA(pattern);
     const DFA dfa = CompilePatternToDFA(pattern);

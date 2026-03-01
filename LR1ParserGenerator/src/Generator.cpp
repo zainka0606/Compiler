@@ -66,7 +66,7 @@ MakeAugmentedStartSymbol(const GrammarSpecAST &spec,
 
 const FlattenedProduction &
 GetProductionChecked(const LR1CanonicalCollection &collection,
-                     std::size_t index) {
+                     const std::size_t index) {
     if (index >= collection.productions.size()) {
         throw BuildException("internal error: production index out of range");
     }
@@ -81,8 +81,8 @@ std::vector<LR1Item> NormalizeItems(std::vector<LR1Item> items) {
 }
 
 SymbolSet FirstOfTailThenLookahead(const std::vector<std::string> &rhs,
-                                   std::size_t tail_start,
-                                   std::string_view fallback_lookahead,
+                                   const std::size_t tail_start,
+                                   const std::string_view fallback_lookahead,
                                    const std::string &augmented_start_symbol,
                                    const SymbolSet &terminal_set,
                                    const SymbolSet &nonterminal_set,
@@ -173,7 +173,8 @@ GotoItems(const LR1CanonicalCollection &collection,
           const SymbolSetMap &first_sets,
           const std::unordered_set<std::string> &terminal_set,
           const std::unordered_set<std::string> &nonterminal_set,
-          const std::vector<LR1Item> &state_items, std::string_view symbol) {
+          const std::vector<LR1Item> &state_items,
+          const std::string_view symbol) {
     std::vector<LR1Item> moved;
     for (const auto &item : state_items) {
         const auto &production =
@@ -409,7 +410,7 @@ std::string ActionToString(const LR1Action &action) {
     return "action?";
 }
 
-std::string ConflictKindToString(LR1ConflictKind kind) {
+std::string ConflictKindToString(const LR1ConflictKind kind) {
     switch (kind) {
     case LR1ConflictKind::ShiftReduce:
         return "shift/reduce";
@@ -521,9 +522,9 @@ LR1ParseTable BuildLR1ParseTable(const GrammarSpecAST &spec) {
     std::vector<std::map<std::string, LR1Action>> action_maps(state_count);
     std::vector<std::map<std::string, std::size_t>> goto_maps(state_count);
 
-    std::unordered_set<std::string> terminal_set(collection.terminals.begin(),
+    std::unordered_set terminal_set(collection.terminals.begin(),
                                                  collection.terminals.end());
-    std::unordered_set<std::string> nonterminal_set(
+    std::unordered_set nonterminal_set(
         collection.nonterminals.begin(), collection.nonterminals.end());
     if (terminal_set.contains(collection.end_marker)) {
         throw BuildException(
@@ -568,7 +569,7 @@ LR1ParseTable BuildLR1ParseTable(const GrammarSpecAST &spec) {
             conflict.kind = ClassifyConflict(conflict.actions);
         };
 
-    auto insert_action = [&](std::size_t state_index, const std::string &symbol,
+    auto insert_action = [&](const std::size_t state_index, const std::string &symbol,
                              const LR1Action &action) {
         auto &row = action_maps[state_index];
         auto [it, inserted] = row.emplace(symbol, action);
@@ -694,10 +695,10 @@ std::string ToDebugString(const LR1ParseTable &table) {
 
 std::string
 LR1CanonicalCollectionToGraphvizDot(const LR1CanonicalCollection &collection,
-                                    std::string_view graph_name) {
+                                    const std::string_view graph_name) {
     std::ostringstream oss;
     oss << "digraph "
-        << compiler::common::SanitizeIdentifier(graph_name,
+        << common::SanitizeIdentifier(graph_name,
                                                 "lr1_canonical_collection")
         << " {\n";
     oss << "  rankdir=LR;\n";
@@ -716,7 +717,7 @@ LR1CanonicalCollectionToGraphvizDot(const LR1CanonicalCollection &collection,
             lines.push_back(ItemToText(collection, item));
         }
         oss << "  s" << state_index << " [label=\""
-            << compiler::common::EscapeGraphvizLabel(JoinLines(lines))
+            << common::EscapeGraphvizLabel(JoinLines(lines))
             << "\"];\n";
     }
 
@@ -729,7 +730,7 @@ LR1CanonicalCollectionToGraphvizDot(const LR1CanonicalCollection &collection,
                           collection.terminals.end(),
                           symbol) != collection.terminals.end();
             oss << "  s" << state_index << " -> s" << target << " [label=\""
-                << compiler::common::EscapeGraphvizLabel(symbol) << "\"";
+                << common::EscapeGraphvizLabel(symbol) << "\"";
             if (is_terminal) {
                 oss << ", color=\"royalblue\", fontcolor=\"royalblue\", "
                        "style=\"dashed\"";
@@ -743,10 +744,10 @@ LR1CanonicalCollectionToGraphvizDot(const LR1CanonicalCollection &collection,
 }
 
 std::string LR1ParseTableToGraphvizDot(const LR1ParseTable &table,
-                                       std::string_view graph_name) {
+                                       const std::string_view graph_name) {
     std::ostringstream oss;
     oss << "digraph "
-        << compiler::common::SanitizeIdentifier(graph_name, "lr1_parse_table")
+        << common::SanitizeIdentifier(graph_name, "lr1_parse_table")
         << " {\n";
     oss << "  rankdir=LR;\n";
     oss << "  node [shape=box, fontname=\"monospace\"];\n";
@@ -795,7 +796,7 @@ std::string LR1ParseTableToGraphvizDot(const LR1ParseTable &table,
         }
 
         oss << "  s" << state_index << " [label=\""
-            << compiler::common::EscapeGraphvizLabel(JoinLines(lines)) << "\"";
+            << common::EscapeGraphvizLabel(JoinLines(lines)) << "\"";
         if (conflict_it != conflicts_by_state.end()) {
             oss << ", color=\"red\", penwidth=2";
         }
@@ -811,7 +812,7 @@ std::string LR1ParseTableToGraphvizDot(const LR1ParseTable &table,
             }
             oss << "  s" << state_index << " -> s" << action.target_state
                 << " [label=\"A:"
-                << compiler::common::EscapeGraphvizLabel(symbol)
+                << common::EscapeGraphvizLabel(symbol)
                 << "\", color=\"royalblue\", fontcolor=\"royalblue\", "
                    "style=\"dashed\"];\n";
         }
@@ -820,7 +821,7 @@ std::string LR1ParseTableToGraphvizDot(const LR1ParseTable &table,
          ++state_index) {
         for (const auto &[symbol, target] : table.goto_rows[state_index]) {
             oss << "  s" << state_index << " -> s" << target << " [label=\"G:"
-                << compiler::common::EscapeGraphvizLabel(symbol) << "\"];\n";
+                << common::EscapeGraphvizLabel(symbol) << "\"];\n";
         }
     }
 

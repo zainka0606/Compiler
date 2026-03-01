@@ -12,8 +12,9 @@ namespace compiler::parsergen1 {
 
 namespace {
 
-const LR1Action *FindAction(const LR1ParseTable &table, std::size_t state_index,
-                            std::string_view symbol) {
+const LR1Action *FindAction(const LR1ParseTable &table,
+                            const std::size_t state_index,
+                            const std::string_view symbol) {
     if (state_index >= table.action_rows.size()) {
         return nullptr;
     }
@@ -25,8 +26,9 @@ const LR1Action *FindAction(const LR1ParseTable &table, std::size_t state_index,
     return nullptr;
 }
 
-const std::size_t *FindGoto(const LR1ParseTable &table, std::size_t state_index,
-                            std::string_view symbol) {
+const std::size_t *FindGoto(const LR1ParseTable &table,
+                            const std::size_t state_index,
+                            const std::string_view symbol) {
     if (state_index >= table.goto_rows.size()) {
         return nullptr;
     }
@@ -48,7 +50,7 @@ std::size_t EmitGraphvizNode(const CSTNode &node, std::ostringstream &out,
         label += std::string(node.Lexeme());
     }
     out << "  n" << id << " [label=\""
-        << compiler::common::EscapeGraphvizLabel(label) << "\"];\n";
+        << common::EscapeGraphvizLabel(label) << "\"];\n";
 
     for (const std::unique_ptr<CSTNode> &child : node.Children()) {
         const std::size_t child_id = EmitGraphvizNode(*child, out, next_id);
@@ -68,20 +70,20 @@ const std::vector<std::unique_ptr<CSTNode>> &CSTNode::Children() const {
 }
 
 std::size_t CSTNode::ProductionIndex() const {
-    return compiler::lr1::kInvalidIndex;
+    return lr1::kInvalidIndex;
 }
 
 std::size_t CSTNode::SourceRuleIndex() const {
-    return compiler::lr1::kInvalidIndex;
+    return lr1::kInvalidIndex;
 }
 
 std::size_t CSTNode::SourceAlternativeIndex() const {
-    return compiler::lr1::kInvalidIndex;
+    return lr1::kInvalidIndex;
 }
 
 std::size_t CSTNode::ChildCount() const { return Children().size(); }
 
-const CSTNode &CSTNode::Child(std::size_t index) const {
+const CSTNode &CSTNode::Child(const std::size_t index) const {
     const auto &children = Children();
     if (index >= children.size() || children[index] == nullptr) {
         throw std::out_of_range("CST child index out of range");
@@ -90,7 +92,8 @@ const CSTNode &CSTNode::Child(std::size_t index) const {
 }
 
 CSTTerminalNode::CSTTerminalNode(std::string symbol, std::string lexeme,
-                                 std::size_t line, std::size_t column)
+                                 const std::size_t line,
+                                 const std::size_t column)
     : symbol_(std::move(symbol)), lexeme_(std::move(lexeme)), line_(line),
       column_(column) {}
 
@@ -105,10 +108,10 @@ std::size_t CSTTerminalNode::Line() const { return line_; }
 std::size_t CSTTerminalNode::Column() const { return column_; }
 
 CSTNonterminalNode::CSTNonterminalNode(
-    std::string symbol, std::size_t line, std::size_t column,
+    std::string symbol, const std::size_t line, const std::size_t column,
     std::vector<std::unique_ptr<CSTNode>> children,
-    std::size_t production_index, std::size_t source_rule_index,
-    std::size_t source_alternative_index)
+    const std::size_t production_index, const std::size_t source_rule_index,
+    const std::size_t source_alternative_index)
     : symbol_(std::move(symbol)), line_(line), column_(column),
       children_(std::move(children)), production_index_(production_index),
       source_rule_index_(source_rule_index),
@@ -225,7 +228,7 @@ CST ParseTokensToCST(const LR1ParseTable &table,
 
             const std::size_t pop_count = production.rhs.size();
             if (node_stack.size() < pop_count ||
-                state_stack.size() < (pop_count + 1)) {
+                state_stack.size() < pop_count + 1) {
                 throw CSTParseException(
                     "parser stack underflow during reduction");
             }
@@ -278,7 +281,8 @@ CST ParseTokensToCST(const LR1ParseTable &table,
     }
 }
 
-std::string CSTToGraphvizDot(const CST &cst, std::string_view graph_name) {
+std::string CSTToGraphvizDot(const CST &cst,
+                             const std::string_view graph_name) {
     if (cst.Empty()) {
         throw CSTParseException("cannot render empty CST");
     }
@@ -324,9 +328,8 @@ const FlattenedProduction &GetCSTReductionProduction(const LR1ParseTable &table,
     return *production;
 }
 
-bool CSTNodeMatchesProduction(const LR1ParseTable &table, const CSTNode &node,
-                              std::string_view lhs,
-                              std::initializer_list<std::string_view> rhs) {
+bool CSTNodeMatchesProduction(const LR1ParseTable &table, const CSTNode &node, const std::string_view lhs,
+    const std::initializer_list<std::string_view> rhs) {
     const FlattenedProduction *production =
         TryGetCSTReductionProduction(table, node);
     if (production == nullptr || production->lhs != lhs ||

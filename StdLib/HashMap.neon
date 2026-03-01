@@ -1,0 +1,190 @@
+mod HashMap;
+use Core;
+use LinkedList;
+
+# Hash map with separate chaining buckets backed by LinkedList.
+
+let HASH_MAP_MIN_BUCKETS = 8;
+let HASH_MAP_LOAD_NUMERATOR = 3;
+let HASH_MAP_LOAD_DENOMINATOR = 4;
+
+class HashMapEntry {
+  key;
+  value;
+
+  HashMapEntry(key, value) {
+    self.key = key;
+    self.value = value;
+  }
+}
+
+fn hashMapNormalizeBucketCount(requested) {
+  let bucketCount = requested < HASH_MAP_MIN_BUCKETS ? HASH_MAP_MIN_BUCKETS : requested;
+  let rounded = 1;
+  while (rounded < bucketCount) {
+    rounded *= 2;
+  }
+  return rounded;
+}
+
+fn hashMapMakeBuckets(bucketCount) {
+  let buckets = [];
+  for (let i = 0; i < bucketCount; i += 1) {
+    push(buckets, linkedListNew());
+  }
+  return buckets;
+}
+
+fn hashMapHashString(text) {
+  let hash = 2166136261;
+  for (let i = 0; i < len(text); i += 1) {
+    hash = hash ^ (text[i] & 0xFF);
+    hash = (hash * 16777619) & 0x7FFFFFFF;
+  }
+  return hash & 0x7FFFFFFF;
+}
+
+class HashMap {
+  buckets;
+  size;
+
+  HashMap(buckets, size) {
+    self.buckets = buckets;
+    self.size = size;
+  }
+
+  fn count() {
+    return self.size;
+  }
+
+  fn isEmpty() {
+    return self.size == 0;
+  }
+
+  fn bucketCount() {
+    return len(self.buckets);
+  }
+
+  fn bucketIndexForKey(keyText) {
+    return hashMapHashString(keyText) % len(self.buckets);
+  }
+
+  fn resizeBuckets(newBucketCount) {
+    let normalized = hashMapNormalizeBucketCount(newBucketCount);
+    let oldBuckets = self.buckets;
+    self.buckets = hashMapMakeBuckets(normalized);
+    self.size = 0;
+
+    for (let i = 0; i < len(oldBuckets); i += 1) {
+      let bucket = oldBuckets[i];
+      for (let j = 0; j < bucket.count(); j += 1) {
+        let entry = bucket.get(j);
+        self.put(entry.key, entry.value);
+      }
+    }
+
+    return len(self.buckets);
+  }
+
+  fn put(key, value) {
+    let keyText = key as string;
+    let bucketIndex = self.bucketIndexForKey(keyText);
+    let bucket = self.buckets[bucketIndex];
+
+    for (let i = 0; i < bucket.count(); i += 1) {
+      let entry = bucket.get(i);
+      if (entry.key == keyText) {
+        entry.value = value;
+        return false;
+      }
+    }
+
+    bucket.append(new HashMapEntry(keyText, value));
+    self.size += 1;
+
+    if (self.size * HASH_MAP_LOAD_DENOMINATOR > len(self.buckets) * HASH_MAP_LOAD_NUMERATOR) {
+      self.resizeBuckets(len(self.buckets) * 2);
+    }
+
+    return true;
+  }
+
+  fn containsKey(key) {
+    let keyText = key as string;
+    let bucket = self.buckets[self.bucketIndexForKey(keyText)];
+    for (let i = 0; i < bucket.count(); i += 1) {
+      let entry = bucket.get(i);
+      if (entry.key == keyText) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  fn get(key, defaultValue) {
+    let keyText = key as string;
+    let bucket = self.buckets[self.bucketIndexForKey(keyText)];
+    for (let i = 0; i < bucket.count(); i += 1) {
+      let entry = bucket.get(i);
+      if (entry.key == keyText) {
+        return entry.value;
+      }
+    }
+    return defaultValue;
+  }
+
+  fn remove(key) {
+    let keyText = key as string;
+    let bucket = self.buckets[self.bucketIndexForKey(keyText)];
+
+    for (let i = 0; i < bucket.count(); i += 1) {
+      let entry = bucket.get(i);
+      if (entry.key == keyText) {
+        bucket.removeAt(i);
+        self.size -= 1;
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  fn keys() {
+    let out = [];
+    for (let i = 0; i < len(self.buckets); i += 1) {
+      let bucket = self.buckets[i];
+      for (let j = 0; j < bucket.count(); j += 1) {
+        let entry = bucket.get(j);
+        push(out, entry.key);
+      }
+    }
+    return out;
+  }
+
+  fn values() {
+    let out = [];
+    for (let i = 0; i < len(self.buckets); i += 1) {
+      let bucket = self.buckets[i];
+      for (let j = 0; j < bucket.count(); j += 1) {
+        let entry = bucket.get(j);
+        push(out, entry.value);
+      }
+    }
+    return out;
+  }
+
+  fn clear() {
+    self.buckets = hashMapMakeBuckets(HASH_MAP_MIN_BUCKETS);
+    self.size = 0;
+    return 0;
+  }
+}
+
+fn hashMapWithCapacity(bucketCount) {
+  let normalized = hashMapNormalizeBucketCount(bucketCount);
+  return new HashMap(hashMapMakeBuckets(normalized), 0);
+}
+
+fn hashMapNew() {
+  return hashMapWithCapacity(HASH_MAP_MIN_BUCKETS);
+}

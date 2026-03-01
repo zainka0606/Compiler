@@ -22,7 +22,7 @@ struct CLIOptions {
     bool dump_dfa = false;
 };
 
-std::string UsageText(std::string_view program) {
+std::string UsageText(const std::string_view program) {
     std::ostringstream oss;
     oss << "Usage: " << program << " --input <spec.lex> [options]\n\n";
     oss << "Options:\n";
@@ -42,13 +42,13 @@ std::string UsageText(std::string_view program) {
     return oss.str();
 }
 
-CLIOptions ParseCLIOptions(int argc, const char *const *argv) {
+CLIOptions ParseCLIOptions(const int argc, const char *const *argv) {
     CLIOptions options;
 
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         auto require_value = [&](const std::string &flag) -> std::string {
-            if ((i + 1) >= argc) {
+            if (i + 1 >= argc) {
                 throw LexerCompileException("missing value for option " + flag);
             }
             ++i;
@@ -79,7 +79,7 @@ CLIOptions ParseCLIOptions(int argc, const char *const *argv) {
 
 std::string ReadTextFile(const std::filesystem::path &path) {
     try {
-        return compiler::common::ReadTextFile(path);
+        return common::ReadTextFile(path);
     } catch (const std::exception &ex) {
         throw LexerCompileException(ex.what());
     }
@@ -99,9 +99,10 @@ DeriveOutputDirectory(const std::filesystem::path &input_path) {
     return stem;
 }
 
-void WriteTextFile(const std::filesystem::path &path, std::string_view text) {
+void WriteTextFile(const std::filesystem::path &path,
+                   const std::string_view text) {
     try {
-        compiler::common::WriteTextFile(path, text);
+        common::WriteTextFile(path, text);
     } catch (const std::exception &ex) {
         throw LexerCompileException(ex.what());
     }
@@ -110,7 +111,7 @@ void WriteTextFile(const std::filesystem::path &path, std::string_view text) {
 
 int RunLexerGeneratorCLI(int argc, const char *const *argv) {
     const std::string program =
-        (argc > 0 && argv && argv[0]) ? argv[0] : "LexerGenerator";
+        argc > 0 && argv && argv[0] ? argv[0] : "LexerGenerator";
 
     try {
         const CLIOptions options = ParseCLIOptions(argc, argv);
@@ -149,13 +150,13 @@ int RunLexerGeneratorCLI(int argc, const char *const *argv) {
                 std::ostringstream filename;
                 filename << std::setw(2) << std::setfill('0') << rule.rule_index
                          << "_"
-                         << compiler::common::SanitizeIdentifier(rule.name,
+                         << common::SanitizeIdentifier(rule.name,
                                                                  "rule")
                          << ".dot";
                 WriteTextFile(
                     nfa_dir / filename.str(),
                     NFAToGraphvizDot(
-                        rule.nfa, "NFA_" + compiler::common::SanitizeIdentifier(
+                        rule.nfa, "NFA_" + common::SanitizeIdentifier(
                                                rule.name, "rule")));
             }
         }

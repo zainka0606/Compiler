@@ -19,14 +19,14 @@ using compiler::regex::ParseException;
 
 void Fail(std::string message) { throw std::runtime_error(std::move(message)); }
 
-void ExpectTrue(bool condition, std::string_view message) {
+void ExpectTrue(const bool condition, const std::string_view message) {
     if (!condition) {
         Fail(std::string(message));
     }
 }
 
-void ExpectEqual(std::size_t actual, std::size_t expected,
-                 std::string_view message) {
+void ExpectEqual(const std::size_t actual, const std::size_t expected,
+                 const std::string_view message) {
     if (actual == expected) {
         return;
     }
@@ -49,8 +49,8 @@ void ExpectSameLanguage(const DFA &lhs, const DFA &rhs,
     }
 }
 
-compiler::regex::DFAState MakeState(std::size_t default_target,
-                                    bool accepting = false) {
+compiler::regex::DFAState MakeState(const std::size_t default_target,
+                                    const bool accepting = false) {
     compiler::regex::DFAState state;
     state.transitions.fill(default_target);
     state.is_accepting = accepting;
@@ -82,7 +82,7 @@ DFA MakeReducibleManualDFA() {
     return dfa;
 }
 
-void ExpectInvalidPattern(std::string_view pattern) {
+void ExpectInvalidPattern(const std::string_view pattern) {
     try {
         (void)CompilePatternToMinimizedDFA(pattern);
         Fail(std::string("expected parse failure for pattern '") +

@@ -1,14 +1,14 @@
-set(INTERPRETER_GRAMMAR_SPEC_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/Language.pg")
-set(INTERPRETER_GRAMMAR_SPEC_BUILD "${CMAKE_CURRENT_BINARY_DIR}/Language.pg")
-set(INTERPRETER_LEXER_SPEC_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/LanguageLexer.lex")
-set(INTERPRETER_LEXER_SPEC_BUILD "${CMAKE_CURRENT_BINARY_DIR}/LanguageLexer.lex")
-set(INTERPRETER_INPUT_SOURCE "${CMAKE_SOURCE_DIR}/Examples/Mandelbrot.txt")
-set(INTERPRETER_INPUT_BUILD "${CMAKE_CURRENT_BINARY_DIR}/Input.txt")
-set(INTERPRETER_STDLIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/StdLib")
+set(INTERPRETER_GRAMMAR_SPEC_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/Neon.pg")
+set(INTERPRETER_GRAMMAR_SPEC_BUILD "${CMAKE_CURRENT_BINARY_DIR}/Neon.pg")
+set(INTERPRETER_LEXER_SPEC_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/NeonLexer.lex")
+set(INTERPRETER_LEXER_SPEC_BUILD "${CMAKE_CURRENT_BINARY_DIR}/NeonLexer.lex")
+set(INTERPRETER_INPUT_SOURCE "${CMAKE_SOURCE_DIR}/Examples/Mandelbrot.neon")
+set(INTERPRETER_INPUT_BUILD "${CMAKE_CURRENT_BINARY_DIR}/Input.neon")
+set(INTERPRETER_STDLIB_DIR "${CMAKE_SOURCE_DIR}/StdLib")
 
 # ParserGenerator derives the output directory from the input filename stem:
-# Language.pg -> <binary dir>/Language/
-set(INTERPRETER_GRAMMAR_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/Language")
+# Neon.pg -> <binary dir>/Neon/
+set(INTERPRETER_GRAMMAR_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/Neon")
 set(INTERPRETER_GENERATED_PARSER_HEADER "${INTERPRETER_GRAMMAR_OUTPUT_DIR}/GeneratedParser.h")
 set(INTERPRETER_GENERATED_PARSER_SOURCE "${INTERPRETER_GRAMMAR_OUTPUT_DIR}/GeneratedParser.cpp")
 set(INTERPRETER_GRAMMAR_AST_DOT "${INTERPRETER_GRAMMAR_OUTPUT_DIR}/AST.dot")
@@ -17,9 +17,9 @@ set(INTERPRETER_GRAMMAR_TABLE_DOT "${INTERPRETER_GRAMMAR_OUTPUT_DIR}/ParseTable.
 
 set(INTERPRETER_RUNTIME_AST_DOT "${CMAKE_CURRENT_BINARY_DIR}/AST.dot")
 
-set(INTERPRETER_LEXER_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/LanguageLexer")
-set(INTERPRETER_LEXER_GENERATED_HEADER "${INTERPRETER_LEXER_GENERATED_DIR}/LanguageLexer.h")
-set(INTERPRETER_LEXER_GENERATED_SOURCE "${INTERPRETER_LEXER_GENERATED_DIR}/LanguageLexer.cpp")
+set(INTERPRETER_LEXER_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/NeonLexer")
+set(INTERPRETER_LEXER_GENERATED_HEADER "${INTERPRETER_LEXER_GENERATED_DIR}/NeonLexer.h")
+set(INTERPRETER_LEXER_GENERATED_SOURCE "${INTERPRETER_LEXER_GENERATED_DIR}/NeonLexer.cpp")
 
 compiler_add_copy_file_command(
         OUTPUT "${INTERPRETER_INPUT_BUILD}"
@@ -32,7 +32,7 @@ compiler_add_lexer_generator_command(
         SPEC_BUILD "${INTERPRETER_LEXER_SPEC_BUILD}"
         OUTPUT_HEADER "${INTERPRETER_LEXER_GENERATED_HEADER}"
         OUTPUT_SOURCE "${INTERPRETER_LEXER_GENERATED_SOURCE}"
-        COMMENT "Generating Interpreter language lexer from LanguageLexer.lex"
+        COMMENT "Generating Neon lexer from NeonLexer.lex"
 )
 
 compiler_add_parser_generator_command(
@@ -46,7 +46,7 @@ compiler_add_parser_generator_command(
         EXTRA_ARGS
         --header "GeneratedParser.h"
         --source "GeneratedParser.cpp"
-        COMMENT "Generating Interpreter parser and Graphviz dumps from Language.pg"
+        COMMENT "Generating Neon parser and Graphviz dumps from Neon.pg"
 )
 
 set_source_files_properties(
@@ -83,6 +83,7 @@ add_custom_target(InterpreterLexerCodegen
 add_library(Interpreter
         src/SymbolTable.cpp
         src/CFG.cpp
+        src/IRBackend.cpp
         src/Interpreter.cpp
         "${INTERPRETER_GENERATED_PARSER_SOURCE}"
         "${INTERPRETER_LEXER_GENERATED_SOURCE}"
@@ -104,6 +105,7 @@ target_include_directories(Interpreter
 target_link_libraries(Interpreter
         PUBLIC
         ParserGenerator
+        IR
         PRIVATE
         Common
 )
@@ -151,7 +153,8 @@ target_link_libraries(InterpreterAstTestExe
 )
 
 add_custom_target(InterpreterAstTestRun
-        COMMAND "$<TARGET_FILE:InterpreterAstTestExe>"
+        COMMAND "${CMAKE_COMMAND}" -E chdir "${CMAKE_SOURCE_DIR}"
+        "$<TARGET_FILE:InterpreterAstTestExe>"
         "${INTERPRETER_INPUT_BUILD}"
         "${INTERPRETER_RUNTIME_AST_DOT}"
         DEPENDS

@@ -10,7 +10,7 @@ namespace compiler::parsergen1 {
 
 namespace {
 
-std::string MakeRawStringLiteral(std::string_view text) {
+std::string MakeRawStringLiteral(const std::string_view text) {
     std::string delimiter = "PGSPEC";
     std::size_t suffix = 0;
     while (true) {
@@ -37,19 +37,19 @@ GeneratedParserFiles GenerateCppParser(const GrammarSpecAST &spec,
 
     GeneratedParserFiles out;
     out.namespace_name =
-        compiler::common::SanitizeIdentifier(spec.grammar_name, "Generated");
+        common::SanitizeIdentifier(spec.grammar_name, "Generated");
     out.parser_class_name = out.namespace_name + "Parser";
     out.header_filename = header_filename.empty()
-                              ? (out.parser_class_name + ".h")
+                              ? out.parser_class_name + ".h"
                               : std::string(header_filename);
     out.source_filename = source_filename.empty()
-                              ? (out.parser_class_name + ".cpp")
+                              ? out.parser_class_name + ".cpp"
                               : std::string(source_filename);
 
     const std::string embedded_spec_literal =
         MakeRawStringLiteral(grammar_spec_source);
     const std::string grammar_name_escaped =
-        compiler::common::EscapeForCppString(spec.grammar_name);
+        common::EscapeForCppString(spec.grammar_name);
 
     {
         std::ostringstream h;

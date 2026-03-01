@@ -1,0 +1,128 @@
+mod ArrayList;
+use Core;
+
+# Dynamic array-backed list.
+
+let ARRAY_LIST_DEFAULT_CAPACITY = 4;
+
+class ArrayList {
+  storage;
+  size;
+  capacity;
+
+  ArrayList(storage, size, capacity) {
+    self.storage = storage;
+    self.size = size;
+    self.capacity = capacity;
+  }
+
+  fn count() {
+    return self.size;
+  }
+
+  fn isEmpty() {
+    return self.size == 0;
+  }
+
+  fn ensureCapacity(minCapacity) {
+    if (self.capacity >= minCapacity) {
+      return self.capacity;
+    }
+
+    let newCapacity = self.capacity <= 0 ? ARRAY_LIST_DEFAULT_CAPACITY : self.capacity;
+    while (newCapacity < minCapacity) {
+      newCapacity *= 2;
+    }
+
+    let newStorage = [];
+    for (let i = 0; i < newCapacity; i += 1) {
+      push(newStorage, 0);
+    }
+
+    for (let i = 0; i < self.size; i += 1) {
+      newStorage[i] = self.storage[i];
+    }
+
+    self.storage = newStorage;
+    self.capacity = newCapacity;
+    return self.capacity;
+  }
+
+  fn add(value) {
+    self.ensureCapacity(self.size + 1);
+    self.storage[self.size] = value;
+    self.size += 1;
+    return self.size;
+  }
+
+  fn get(index) {
+    if (index < 0 || index >= self.size) {
+      return 0;
+    }
+    return self.storage[index];
+  }
+
+  fn set(index, value) {
+    if (index < 0 || index >= self.size) {
+      return 0;
+    }
+    let oldValue = self.storage[index];
+    self.storage[index] = value;
+    return oldValue;
+  }
+
+  fn removeAt(index) {
+    if (index < 0 || index >= self.size) {
+      return 0;
+    }
+
+    let removed = self.storage[index];
+    for (let i = index; i + 1 < self.size; i += 1) {
+      self.storage[i] = self.storage[i + 1];
+    }
+
+    self.size -= 1;
+    if (self.size >= 0) {
+      self.storage[self.size] = 0;
+    }
+    return removed;
+  }
+
+  fn popBack() {
+    return self.removeAt(self.size - 1);
+  }
+
+  fn clear() {
+    self.size = 0;
+    return 0;
+  }
+
+  fn toArray() {
+    let out = [];
+    for (let i = 0; i < self.size; i += 1) {
+      push(out, self.storage[i]);
+    }
+    return out;
+  }
+}
+
+fn arrayListWithCapacity(initialCapacity) {
+  let capacity = initialCapacity <= 0 ? ARRAY_LIST_DEFAULT_CAPACITY : initialCapacity;
+  let storage = [];
+  for (let i = 0; i < capacity; i += 1) {
+    push(storage, 0);
+  }
+  return new ArrayList(storage, 0, capacity);
+}
+
+fn arrayListNew() {
+  return arrayListWithCapacity(ARRAY_LIST_DEFAULT_CAPACITY);
+}
+
+fn arrayListFromArray(values) {
+  let out = arrayListWithCapacity(len(values) + ARRAY_LIST_DEFAULT_CAPACITY);
+  for (let i = 0; i < len(values); i += 1) {
+    out.add(values[i]);
+  }
+  return out;
+}

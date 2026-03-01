@@ -1,7 +1,7 @@
 #include "Common/Graphviz.h"
 
 namespace compiler::common {
-std::string EscapeGraphvizLabel(std::string_view text) {
+std::string EscapeGraphvizLabel(const std::string_view text) {
     std::string out;
     out.reserve(text.size() * 2);
     for (char c : text) {

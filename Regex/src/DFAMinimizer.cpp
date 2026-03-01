@@ -25,11 +25,11 @@ struct ReachabilityInfo {
 };
 
 struct DisjointSet {
-    explicit DisjointSet(std::size_t size) : parent(size), rank(size, 0) {
+    explicit DisjointSet(const std::size_t size) : parent(size), rank(size, 0) {
         std::iota(parent.begin(), parent.end(), 0);
     }
 
-    std::size_t Find(std::size_t x) {
+    std::size_t Find(const std::size_t x) {
         if (parent[x] != x) {
             parent[x] = Find(parent[x]);
         }
@@ -143,14 +143,14 @@ NormalizedDFA NormalizeReachableDFA(const DFA &dfa) {
 
             const std::size_t remapped = reachable.old_to_new[target];
             transitions[byte_value] =
-                (remapped == kNoState) ? sink_state : remapped;
+                remapped == kNoState ? sink_state : remapped;
         }
     }
 
     return normalized;
 }
 
-bool IsMarked(const std::vector<std::uint8_t> &marked, std::size_t n,
+bool IsMarked(const std::vector<std::uint8_t> &marked, const std::size_t n,
               std::size_t a, std::size_t b) {
     if (a == b) {
         return false;
@@ -161,7 +161,7 @@ bool IsMarked(const std::vector<std::uint8_t> &marked, std::size_t n,
     return marked[a * n + b] != 0;
 }
 
-void Mark(std::vector<std::uint8_t> &marked, std::size_t n, std::size_t a,
+void Mark(std::vector<std::uint8_t> &marked, const std::size_t n, std::size_t a,
           std::size_t b) {
     if (a == b) {
         return;
@@ -229,7 +229,7 @@ DFA MinimizeNormalizedDFA(const NormalizedDFA &normalized) {
 
     std::unordered_map<std::size_t, std::size_t> root_to_class;
     root_to_class.reserve(n);
-    std::vector<std::size_t> state_to_class(n, kNoState);
+    std::vector state_to_class(n, kNoState);
 
     for (std::size_t state = 0; state < n; ++state) {
         const std::size_t root = dsu.Find(state);
@@ -247,7 +247,7 @@ DFA MinimizeNormalizedDFA(const NormalizedDFA &normalized) {
         state.is_accepting = false;
     }
 
-    std::vector<std::size_t> representative_for_class(minimized.states.size(),
+    std::vector representative_for_class(minimized.states.size(),
                                                       kNoState);
     for (std::size_t state = 0; state < n; ++state) {
         const std::size_t class_index = state_to_class[state];
@@ -280,7 +280,7 @@ DFA MinimizeDFA(const DFA &dfa) {
     return MinimizeNormalizedDFA(NormalizeReachableDFA(dfa));
 }
 
-DFA CompilePatternToMinimizedDFA(std::string_view pattern) {
+DFA CompilePatternToMinimizedDFA(const std::string_view pattern) {
     return MinimizeDFA(CompilePatternToDFA(pattern));
 }
 } // namespace compiler::regex

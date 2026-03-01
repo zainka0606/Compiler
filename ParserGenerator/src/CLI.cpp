@@ -17,7 +17,7 @@ struct CLIOptions {
     std::string source_filename;
 };
 
-std::string UsageText(std::string_view program) {
+std::string UsageText(const std::string_view program) {
     std::ostringstream oss;
     oss << "Usage: " << program << " --input <stage2-spec> [options]\n\n";
     oss << "Outputs (written to a directory derived from the input filename "
@@ -37,12 +37,12 @@ std::string UsageText(std::string_view program) {
     return oss.str();
 }
 
-CLIOptions ParseCLIOptions(int argc, const char *const *argv) {
+CLIOptions ParseCLIOptions(const int argc, const char *const *argv) {
     CLIOptions options;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         auto require_value = [&](const std::string &flag) -> std::string {
-            if ((i + 1) >= argc) {
+            if (i + 1 >= argc) {
                 throw BuildException("missing value for option " + flag);
             }
             ++i;
@@ -66,15 +66,16 @@ CLIOptions ParseCLIOptions(int argc, const char *const *argv) {
 
 std::string ReadTextFile(const std::filesystem::path &path) {
     try {
-        return compiler::common::ReadTextFile(path);
+        return common::ReadTextFile(path);
     } catch (const std::exception &ex) {
         throw BuildException(ex.what());
     }
 }
 
-void WriteTextFile(const std::filesystem::path &path, std::string_view text) {
+void WriteTextFile(const std::filesystem::path &path,
+                   const std::string_view text) {
     try {
-        compiler::common::WriteTextFile(path, text);
+        common::WriteTextFile(path, text);
     } catch (const std::exception &ex) {
         throw BuildException(ex.what());
     }
@@ -98,7 +99,7 @@ DeriveOutputDirectory(const std::filesystem::path &input_path) {
 
 int RunParserGeneratorCLI(int argc, const char *const *argv) {
     const std::string program =
-        (argc > 0 && argv && argv[0]) ? argv[0] : "ParserGenerator";
+        argc > 0 && argv && argv[0] ? argv[0] : "ParserGenerator";
 
     try {
         const CLIOptions options = ParseCLIOptions(argc, argv);
@@ -126,10 +127,10 @@ int RunParserGeneratorCLI(int argc, const char *const *argv) {
                       generated.implementation_source);
         WriteTextFile(output_dir / "AST.dot", Stage2SpecASTToGraphvizDot(spec));
         WriteTextFile(output_dir / "CanonicalCollection.dot",
-                      compiler::parsergen::LR1CanonicalCollectionToGraphvizDot(
+                      parsergen::LR1CanonicalCollectionToGraphvizDot(
                           table.canonical_collection));
         WriteTextFile(output_dir / "ParseTable.dot",
-                      compiler::parsergen::LR1ParseTableToGraphvizDot(table));
+                      parsergen::LR1ParseTableToGraphvizDot(table));
 
         std::cout << "Wrote ParserGenerator outputs to " << output_dir.string()
                   << "\n";

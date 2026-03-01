@@ -2,14 +2,13 @@
 
 #include "AST.h"
 #include "CFG.h"
+#include "IR.h"
 #include "SymbolTable.h"
 
-#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <unordered_map>
-#include <variant>
 #include <vector>
 
 namespace compiler::interpreter {
@@ -30,25 +29,21 @@ struct ProgramAnnotation {
     std::unordered_map<std::string, std::vector<std::string>> class_methods;
 };
 
-struct ObjectInstance;
-struct ArrayInstance;
-using ObjectInstancePtr = std::shared_ptr<ObjectInstance>;
-using ArrayInstancePtr = std::shared_ptr<ArrayInstance>;
-using Value = std::variant<std::monostate, double, std::string, bool, char, ObjectInstancePtr, ArrayInstancePtr>;
-
-struct ObjectInstance {
-    std::string class_name;
-    std::unordered_map<std::string, Value> fields;
-};
-
-struct ArrayInstance {
-    std::vector<Value> elements;
-};
+using ObjectInstance = compiler::ir::ObjectInstance;
+using ArrayInstance = compiler::ir::ArrayInstance;
+using ObjectInstancePtr = compiler::ir::ObjectInstancePtr;
+using ArrayInstancePtr = compiler::ir::ArrayInstancePtr;
+using Value = compiler::ir::Value;
 
 std::string ValueToString(const Value &value);
 
 AST ParseProgram(std::string_view source_text);
 ProgramAnnotation AnnotateProgram(const AST &ast);
+compiler::ir::Program CompileProgramToIR(const AST &ast);
+std::vector<compiler::ir::ProgramUnit> CompileStandardLibraryToIR();
+Value ExecuteIRProgram(compiler::ir::Program program,
+                       std::vector<compiler::ir::ProgramUnit> prelude_units,
+                       bool optimize = true);
 Value InterpretProgram(const AST &ast);
 Value InterpretSource(std::string_view source_text);
 

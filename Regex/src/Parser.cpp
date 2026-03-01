@@ -9,7 +9,7 @@ namespace compiler::regex {
 namespace {
 class Parser {
   public:
-    explicit Parser(std::string_view pattern) : pattern_(pattern) {}
+    explicit Parser(const std::string_view pattern) : pattern_(pattern) {}
 
     RegexNode ParsePattern() {
         RegexNode node = ParseExpression();
@@ -30,7 +30,7 @@ class Parser {
     [[nodiscard]] char Peek() const { return AtEnd() ? '\0' : pattern_[pos_]; }
 
     [[nodiscard]] char PeekNext() const {
-        return (pos_ + 1) < pattern_.size() ? pattern_[pos_ + 1] : '\0';
+        return pos_ + 1 < pattern_.size() ? pattern_[pos_ + 1] : '\0';
     }
 
     char Advance() {
@@ -40,7 +40,7 @@ class Parser {
         return pattern_[pos_++];
     }
 
-    bool Match(char expected) {
+    bool Match(const char expected) {
         if (!AtEnd() && pattern_[pos_] == expected) {
             ++pos_;
             return true;
@@ -48,7 +48,7 @@ class Parser {
         return false;
     }
 
-    void Expect(char expected, std::string message) {
+    void Expect(const char expected, std::string message) {
         if (!Match(expected)) {
             Error(std::move(message));
         }
@@ -110,7 +110,7 @@ class Parser {
         return atom;
     }
 
-    [[nodiscard]] static bool IsQuantifierStart(char c) noexcept {
+    [[nodiscard]] static bool IsQuantifierStart(const char c) noexcept {
         return c == '*' || c == '+' || c == '?' || c == '{';
     }
 
@@ -214,7 +214,7 @@ class Parser {
         return Advance();
     }
 
-    char ParseEscapedCharacter(bool in_character_class) {
+    char ParseEscapedCharacter(const bool in_character_class) {
         if (AtEnd()) {
             Error(in_character_class ? "incomplete escape in character class"
                                      : "incomplete escape sequence");
@@ -262,7 +262,7 @@ class Parser {
         }
 
         const std::size_t min = ParseUnsignedNumber();
-        std::optional<std::size_t> max = min;
+        std::optional max = min;
 
         if (Match(',')) {
             if (Match('}')) {
@@ -295,7 +295,7 @@ class Parser {
                 (std::numeric_limits<std::size_t>::max() - digit) / 10) {
                 Error("numeric value in quantifier is too large");
             }
-            value = (value * 10) + digit;
+            value = value * 10 + digit;
         }
 
         if (!saw_digit) {
@@ -305,7 +305,7 @@ class Parser {
         return value;
     }
 
-    static std::string DebugChar(char c) {
+    static std::string DebugChar(const char c) {
         switch (c) {
         case '\n':
             return "\\n";
@@ -323,7 +323,7 @@ class Parser {
     }
 };
 
-std::string EscapeForDebug(char c) {
+std::string EscapeForDebug(const char c) {
     switch (c) {
     case '\n':
         return "\\n";
@@ -418,17 +418,18 @@ void AppendDebug(const RegexNode &node, std::string &out) {
 }
 } // namespace
 
-CharacterClassItem CharacterClassItem::Character(char c) {
+CharacterClassItem CharacterClassItem::Character(const char c) {
     return CharacterClassItem{false, c, c};
 }
 
-CharacterClassItem CharacterClassItem::Range(char first, char last) {
+CharacterClassItem CharacterClassItem::Range(const char first,
+                                             const char last) {
     return CharacterClassItem{true, first, last};
 }
 
 RegexNode RegexNode::Empty() { return RegexNode{Type::Empty}; }
 
-RegexNode RegexNode::Literal(char c) {
+RegexNode RegexNode::Literal(const char c) {
     RegexNode node;
     node.type = Type::Literal;
     node.literal = c;
@@ -455,8 +456,8 @@ RegexNode RegexNode::Alternation(std::vector<RegexNode> items) {
     return node;
 }
 
-RegexNode RegexNode::Repetition(RegexNode operand, std::size_t min,
-                                std::optional<std::size_t> max) {
+RegexNode RegexNode::Repetition(RegexNode operand, const std::size_t min,
+                                const std::optional<std::size_t> max) {
     RegexNode node;
     node.type = Type::Repetition;
     node.repetition = RepetitionBounds{min, max};
@@ -471,7 +472,7 @@ RegexNode RegexNode::Group(RegexNode expression) {
     return node;
 }
 
-RegexNode RegexNode::CharacterClass(bool negated,
+RegexNode RegexNode::CharacterClass(const bool negated,
                                     std::vector<CharacterClassItem> items) {
     RegexNode node;
     node.type = Type::CharacterClass;
@@ -480,12 +481,12 @@ RegexNode RegexNode::CharacterClass(bool negated,
     return node;
 }
 
-ParseException::ParseException(std::size_t position, std::string message)
+ParseException::ParseException(const std::size_t position, std::string message)
     : std::runtime_error(std::move(message)), position_(position) {}
 
 std::size_t ParseException::position() const noexcept { return position_; }
 
-RegexNode Parse(std::string_view pattern) {
+RegexNode Parse(const std::string_view pattern) {
     Parser parser(pattern);
     return parser.ParsePattern();
 }

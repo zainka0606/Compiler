@@ -13,8 +13,8 @@ using compiler::regex::Parse;
 using compiler::regex::ParseException;
 using compiler::regex::ToDebugString;
 
-void ExpectEqual(std::string_view actual, std::string_view expected,
-                 std::string_view context) {
+void ExpectEqual(const std::string_view actual, const std::string_view expected,
+                 const std::string_view context) {
     if (actual == expected) {
         return;
     }
@@ -24,21 +24,23 @@ void ExpectEqual(std::string_view actual, std::string_view expected,
     throw std::runtime_error(oss.str());
 }
 
-void ExpectTrue(bool condition, std::string_view message) {
+void ExpectTrue(const bool condition, const std::string_view message) {
     if (!condition) {
         throw std::runtime_error(std::string(message));
     }
 }
 
-void ExpectParsed(std::string_view pattern, std::string_view expected_debug) {
+void ExpectParsed(const std::string_view pattern,
+                  const std::string_view expected_debug) {
     const auto ast = Parse(pattern);
     const auto debug = ToDebugString(ast);
     ExpectEqual(debug, expected_debug,
                 std::string("parse(") + std::string(pattern) + ")");
 }
 
-void ExpectParseError(std::string_view pattern, std::size_t expected_position,
-                      std::string_view expected_message_substring) {
+void ExpectParseError(const std::string_view pattern,
+                      const std::size_t expected_position,
+                      const std::string_view expected_message_substring) {
     try {
         (void)Parse(pattern);
         throw std::runtime_error(

@@ -13,7 +13,7 @@ namespace compiler::parsergen {
 
 namespace {
 
-std::string MakeRawStringLiteral(std::string_view text) {
+std::string MakeRawStringLiteral(const std::string_view text) {
     std::string delimiter = "PG2SPEC";
     std::size_t suffix = 0;
     while (true) {
@@ -34,9 +34,9 @@ struct InlineCppPlaceholderRef {
     std::size_t end = 0;
 };
 
-bool IsAsciiDigit(char c) { return c >= '0' && c <= '9'; }
+bool IsAsciiDigit(const char c) { return c >= '0' && c <= '9'; }
 
-std::size_t ParseOneBasedIndexLiteral(std::string_view text) {
+std::size_t ParseOneBasedIndexLiteral(const std::string_view text) {
     std::size_t value = 0;
     if (text.empty()) {
         throw BuildException("missing index literal in inline cpp placeholder");
@@ -47,8 +47,7 @@ std::size_t ParseOneBasedIndexLiteral(std::string_view text) {
                                  "' in inline cpp placeholder");
         }
         const std::size_t digit = static_cast<std::size_t>(c - '0');
-        if (value >
-            (std::numeric_limits<std::size_t>::max() - digit) / 10u) {
+        if (value > (std::numeric_limits<std::size_t>::max() - digit) / 10u) {
             throw BuildException("index literal out of range in inline cpp "
                                  "placeholder: " +
                                  std::string(text));
@@ -64,7 +63,7 @@ std::size_t ParseOneBasedIndexLiteral(std::string_view text) {
 }
 
 std::vector<InlineCppPlaceholderRef>
-FindInlineCppPlaceholders(std::string_view code) {
+FindInlineCppPlaceholders(const std::string_view code) {
     enum class ScanState {
         Normal,
         LineComment,
@@ -158,7 +157,7 @@ FindInlineCppPlaceholders(std::string_view code) {
     return out;
 }
 
-std::string ExpandInlineCppPlaceholders(std::string_view code) {
+std::string ExpandInlineCppPlaceholders(const std::string_view code) {
     const std::vector<InlineCppPlaceholderRef> refs =
         FindInlineCppPlaceholders(code);
     if (refs.empty()) {
@@ -171,7 +170,8 @@ std::string ExpandInlineCppPlaceholders(std::string_view code) {
     for (const InlineCppPlaceholderRef &ref : refs) {
         out.append(code.substr(cursor, ref.begin - cursor));
         if (ref.kind == ActionArgKind::ChildLexeme) {
-            out += "TakeLexemeChild(node, " + std::to_string(ref.rhs_index) + ")";
+            out +=
+                "TakeLexemeChild(node, " + std::to_string(ref.rhs_index) + ")";
         } else {
             out += "ASTChild(node, " + std::to_string(ref.rhs_index) + ")";
         }
@@ -181,11 +181,11 @@ std::string ExpandInlineCppPlaceholders(std::string_view code) {
     return out;
 }
 
-bool IsBuiltinTextType(std::string_view type_name) {
+bool IsBuiltinTextType(const std::string_view type_name) {
     return type_name == "string" || type_name == "text";
 }
 
-std::string MapVirtualReturnType(std::string_view type_name) {
+std::string MapVirtualReturnType(const std::string_view type_name) {
     if (IsBuiltinTextType(type_name)) {
         return "std::string";
     }
@@ -317,7 +317,7 @@ void EmitTypedAstHeader(std::ostringstream &h, const Stage2SpecAST &spec) {
                   << MapVirtualReturnType(method.return_type_name) << " "
                   << method.name
                   << "() const { throw std::runtime_error(\"virtual method "
-                  << compiler::common::EscapeForCppString(decl.name +
+                  << common::EscapeForCppString(decl.name +
                                                           "::" + method.name)
                   << " not implemented\"); }\n";
             }
@@ -374,7 +374,7 @@ void EmitTypedAstHeader(std::ostringstream &h, const Stage2SpecAST &spec) {
 }
 
 void EmitTypedAstSource(std::ostringstream &cc, const Stage2SpecAST &spec,
-                        std::string_view parser_class_name) {
+                        const std::string_view parser_class_name) {
     cc << "namespace ast {\n\n";
 
     for (const ASTNodeTypeDecl &decl : spec.ast_node_types) {
@@ -404,7 +404,7 @@ void EmitTypedAstSource(std::ostringstream &cc, const Stage2SpecAST &spec,
         cc << " {}\n\n";
 
         cc << "std::string_view " << decl.name << "::KindName() const {\n";
-        cc << "    return \"" << compiler::common::EscapeForCppString(decl.name)
+        cc << "    return \"" << common::EscapeForCppString(decl.name)
            << "\";\n";
         cc << "}\n\n";
 
@@ -418,12 +418,12 @@ void EmitTypedAstSource(std::ostringstream &cc, const Stage2SpecAST &spec,
             if (field.is_list) {
                 cc << "    for (const auto& value : " << field.name << "_) {\n";
                 cc << "        out.push_back(ChildFieldView{\""
-                   << compiler::common::EscapeForCppString(field.name)
+                   << common::EscapeForCppString(field.name)
                    << "\", value.get()});\n";
                 cc << "    }\n";
             } else {
                 cc << "    out.push_back(ChildFieldView{\""
-                   << compiler::common::EscapeForCppString(field.name) << "\", "
+                   << common::EscapeForCppString(field.name) << "\", "
                    << field.name << "_.get()});\n";
             }
         }
@@ -440,12 +440,12 @@ void EmitTypedAstSource(std::ostringstream &cc, const Stage2SpecAST &spec,
             if (field.is_list) {
                 cc << "    for (const auto& value : " << field.name << "_) {\n";
                 cc << "        out.push_back(TextFieldView{\""
-                   << compiler::common::EscapeForCppString(field.name)
+                   << common::EscapeForCppString(field.name)
                    << "\", value});\n";
                 cc << "    }\n";
             } else {
                 cc << "    out.push_back(TextFieldView{\""
-                   << compiler::common::EscapeForCppString(field.name) << "\", "
+                   << common::EscapeForCppString(field.name) << "\", "
                    << field.name << "_});\n";
             }
         }
@@ -650,19 +650,19 @@ GeneratedParserFiles GenerateCppParser(const Stage2SpecAST &spec,
 
     GeneratedParserFiles out;
     out.namespace_name =
-        compiler::common::SanitizeIdentifier(spec.grammar_name, "Generated");
+        common::SanitizeIdentifier(spec.grammar_name, "Generated");
     out.parser_class_name = out.namespace_name + "Parser";
     out.header_filename = header_filename.empty()
-                              ? (out.parser_class_name + ".h")
+                              ? out.parser_class_name + ".h"
                               : std::string(header_filename);
     out.source_filename = source_filename.empty()
-                              ? (out.parser_class_name + ".cpp")
+                              ? out.parser_class_name + ".cpp"
                               : std::string(source_filename);
 
     const std::string embedded_spec_literal =
         MakeRawStringLiteral(stage2_spec_source);
     const std::string grammar_name_escaped =
-        compiler::common::EscapeForCppString(spec.grammar_name);
+        common::EscapeForCppString(spec.grammar_name);
 
     std::string typed_reason;
     const bool emit_typed_ast = SupportsTypedAstCodegen(spec, &typed_reason);
@@ -729,28 +729,35 @@ GeneratedParserFiles GenerateCppParser(const Stage2SpecAST &spec,
            << embedded_spec_literal << ";\n";
         if (!emit_typed_ast) {
             cc << "constexpr const char* kUntypedAstFallbackReason = \""
-               << compiler::common::EscapeForCppString(typed_reason) << "\";\n";
+               << common::EscapeForCppString(typed_reason) << "\";\n";
         }
-        cc << "const std::vector<std::pair<std::string_view, std::string_view>>& LiteralTerminalLookup() {\n";
-        cc << "    static const std::vector<std::pair<std::string_view, std::string_view>> lookup = {\n";
+        cc << "const std::vector<std::pair<std::string_view, "
+              "std::string_view>>& LiteralTerminalLookup() {\n";
+        cc << "    static const std::vector<std::pair<std::string_view, "
+              "std::string_view>> lookup = {\n";
         for (const LiteralTerminalDecl &literal : spec.literal_terminals) {
             cc << "        {\""
-               << compiler::common::EscapeForCppString(literal.lexeme) << "\", \""
-               << compiler::common::EscapeForCppString(literal.terminal_name)
+               << common::EscapeForCppString(literal.lexeme)
+               << "\", \""
+               << common::EscapeForCppString(literal.terminal_name)
                << "\"},\n";
         }
         cc << "    };\n";
         cc << "    return lookup;\n";
         cc << "}\n\n";
         cc << "std::vector<compiler::parsergen::GenericToken>\n";
-        cc << "NormalizeTokenKindsByLiteralLexeme(const std::vector<compiler::parsergen::GenericToken>& tokens) {\n";
+        cc << "NormalizeTokenKindsByLiteralLexeme(const "
+              "std::vector<compiler::parsergen::GenericToken>& tokens) {\n";
         cc << "    std::vector<compiler::parsergen::GenericToken> out;\n";
         cc << "    out.reserve(tokens.size());\n";
-        cc << "    for (const compiler::parsergen::GenericToken& token : tokens) {\n";
+        cc << "    for (const compiler::parsergen::GenericToken& token : "
+              "tokens) {\n";
         cc << "        compiler::parsergen::GenericToken normalized = token;\n";
-        cc << "        for (const auto& [literal_lexeme, literal_terminal] : LiteralTerminalLookup()) {\n";
+        cc << "        for (const auto& [literal_lexeme, literal_terminal] : "
+              "LiteralTerminalLookup()) {\n";
         cc << "            if (token.lexeme == literal_lexeme) {\n";
-        cc << "                normalized.kind = std::string(literal_terminal);\n";
+        cc << "                normalized.kind = "
+              "std::string(literal_terminal);\n";
         cc << "                break;\n";
         cc << "            }\n";
         cc << "        }\n";
@@ -796,12 +803,14 @@ GeneratedParserFiles GenerateCppParser(const Stage2SpecAST &spec,
         cc << out.parser_class_name << "::CST " << out.parser_class_name
            << "::Parse(const std::vector<Token>& tokens) const {\n";
         if (spec.literal_terminals.empty()) {
-            cc << "    return compiler::parsergen::ParseTokensToCST(ParseTable(), "
+            cc << "    return "
+                  "compiler::parsergen::ParseTokensToCST(ParseTable(), "
                   "tokens);\n";
         } else {
             cc << "    const std::vector<Token> normalized_tokens = "
                   "NormalizeTokenKindsByLiteralLexeme(tokens);\n";
-            cc << "    return compiler::parsergen::ParseTokensToCST(ParseTable(), "
+            cc << "    return "
+                  "compiler::parsergen::ParseTokensToCST(ParseTable(), "
                   "normalized_tokens);\n";
         }
         cc << "}\n\n";

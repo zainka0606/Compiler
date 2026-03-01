@@ -1,0 +1,152 @@
+use Core;
+use Math;
+use PNG;
+
+let IMAGE_WIDTH = 1920;
+let IMAGE_HEIGHT = 1080;
+let OUTPUT_PATH = "Raytracer.png";
+
+class Vec3 {
+  x;
+  y;
+  z;
+
+  Vec3(x, y, z) {
+    self.x = x;
+    self.y = y;
+    self.z = z;
+  }
+
+  fn __add__(other) {
+    return new Vec3(self.x + other.x, self.y + other.y, self.z + other.z);
+  }
+
+  fn __sub__(other) {
+    return new Vec3(self.x - other.x, self.y - other.y, self.z - other.z);
+  }
+
+  fn __mul__(scale) {
+    return new Vec3(self.x * scale, self.y * scale, self.z * scale);
+  }
+
+  fn __rmul__(scale) {
+    return self * scale;
+  }
+
+  fn __div__(scale) {
+    return new Vec3(self.x / scale, self.y / scale, self.z / scale);
+  }
+
+  fn dot(other) {
+    return self.x * other.x + self.y * other.y + self.z * other.z;
+  }
+
+  fn length2() {
+    return self.dot(self);
+  }
+
+  fn length() {
+    return sqrt(self.length2());
+  }
+
+  fn normalized() {
+    let len = self.length();
+    return len == 0 ? new Vec3(0, 0, 0) : self / len;
+  }
+}
+
+class Ray {
+  origin;
+  dir;
+
+  Ray(origin, dir) {
+    self.origin = origin;
+    self.dir = dir;
+  }
+
+  fn at(t) {
+    return self.origin + self.dir * t;
+  }
+}
+
+class Sphere {
+  center;
+  radius;
+
+  Sphere(center, radius) {
+    self.center = center;
+    self.radius = radius;
+  }
+
+  fn hit(ray) {
+    let oc = ray.origin - self.center;
+    let a = ray.dir.dot(ray.dir);
+    let halfB = oc.dot(ray.dir);
+    let c = oc.dot(oc) - self.radius * self.radius;
+    let discriminant = halfB * halfB - a * c;
+
+    if (discriminant < 0) {
+      return -1;
+    }
+
+    let root = sqrt(discriminant);
+    let t = (-halfB - root) / a;
+    if (t > 0.001) {
+      return t;
+    }
+
+    t = (-halfB + root) / a;
+    return t > 0.001 ? t : -1;
+  }
+}
+
+fn shadeBackground(dir) {
+  let t = 0.5 * (dir.y + 1);
+  return 0.2 + 0.5 * t;
+}
+
+fn trace(ray, sphere, lightDir) {
+  let t = sphere.hit(ray);
+  if (t < 0) {
+    return shadeBackground(ray.dir);
+  }
+
+  let p = ray.at(t);
+  let normal = (p - sphere.center).normalized();
+  let diffuse = clamp(normal.dot(lightDir), 0, 1);
+  return clamp(0.15 + 0.85 * diffuse, 0, 1);
+}
+
+fn toByte(value01) {
+  return clamp((0xFF * value01) // 1, 0, 0xFF);
+}
+
+fn render(width, height, outputPath) {
+  let cameraOrigin = new Vec3(0, 0, 0);
+  let sphere = new Sphere(new Vec3(0, 0, -3.2), 1.0);
+  let lightDir = new Vec3(-0.8, 1.2, 1.0).normalized();
+
+  let aspect = width / height;
+  let vfovDegrees = 55;
+  let halfHeight = tan(radians(vfovDegrees) / 2);
+  let halfWidth = halfHeight * aspect;
+
+  let pixels = [];
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let u = (x + 0.5) / width;
+      let v = (y + 0.5) / height;
+
+      let screenX = (2 * u - 1) * halfWidth;
+      let screenY = (1 - 2 * v) * halfHeight;
+
+      let dir = new Vec3(screenX, screenY, -1).normalized();
+      let ray = new Ray(cameraOrigin, dir);
+      push(pixels, toByte(trace(ray, sphere, lightDir)));
+    }
+  }
+
+  return pngWriteGrayscale(outputPath, width, height, pixels);
+}
+
+render(IMAGE_WIDTH, IMAGE_HEIGHT, OUTPUT_PATH);

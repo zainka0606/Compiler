@@ -4,10 +4,12 @@
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -125,27 +127,71 @@ void PrintAnnotation(
     }
 }
 
+std::string
+BuildIRAssemblyDump(const std::vector<compiler::ir::ProgramUnit> &prelude_units,
+                    const compiler::ir::Program &program,
+                    std::string_view unit_name) {
+    std::ostringstream out;
+    for (const compiler::ir::ProgramUnit &unit : prelude_units) {
+        out << compiler::ir::ProgramToAssembly(unit.program, unit.name);
+        if (!unit.name.empty() && unit.name.back() != '\n') {
+            out << "\n";
+        }
+    }
+    out << compiler::ir::ProgramToAssembly(program, unit_name);
+    return out.str();
+}
+
 int RunFileMode(const std::filesystem::path &input_path,
                 const std::filesystem::path &ast_dot_path) {
     const std::string source = compiler::common::ReadTextFile(input_path);
     const compiler::interpreter::AST ast =
         compiler::interpreter::ParseProgram(source);
+    const compiler::ir::Program ir_program =
+        compiler::interpreter::CompileProgramToIR(ast);
+    const std::vector<compiler::ir::ProgramUnit> stdlib_ir_units =
+        compiler::interpreter::CompileStandardLibraryToIR();
+    compiler::ir::Program optimized_ir_program = ir_program;
+    std::vector<compiler::ir::ProgramUnit> optimized_stdlib_ir_units =
+        stdlib_ir_units;
+    for (compiler::ir::ProgramUnit &unit : optimized_stdlib_ir_units) {
+        compiler::ir::OptimizeProgram(unit.program);
+    }
+    compiler::ir::OptimizeProgram(optimized_ir_program);
+
     const compiler::interpreter::ProgramCFG cfg =
         compiler::interpreter::BuildProgramCFG(ast);
     const compiler::interpreter::ProgramAnnotation annotation =
         compiler::interpreter::AnnotateProgram(ast);
-    const compiler::interpreter::Value result =
-        compiler::interpreter::InterpretProgram(ast);
 
     const std::filesystem::path cfg_dot_path =
         ast_dot_path.parent_path() /
         (ast_dot_path.stem().string() + ".cfg.dot");
+    const std::filesystem::path ir_asm_path =
+        ast_dot_path.parent_path() / (ast_dot_path.stem().string() + ".ir.s");
+    const std::filesystem::path ir_opt_asm_path =
+        ast_dot_path.parent_path() /
+        (ast_dot_path.stem().string() + ".opt.ir.s");
     compiler::common::WriteTextFile(
         ast_dot_path, compiler::interpreter::ASTToGraphvizDot(ast));
     compiler::common::WriteTextFile(
         cfg_dot_path, compiler::interpreter::ProgramCFGToGraphvizDot(cfg));
+    compiler::common::WriteTextFile(
+        ir_asm_path,
+        BuildIRAssemblyDump(stdlib_ir_units, ir_program, input_path.string()));
+    compiler::common::WriteTextFile(
+        ir_opt_asm_path,
+        BuildIRAssemblyDump(optimized_stdlib_ir_units, optimized_ir_program,
+                            input_path.string()));
+    const compiler::interpreter::Value result =
+        compiler::interpreter::ExecuteIRProgram(
+            std::move(optimized_ir_program),
+            std::move(optimized_stdlib_ir_units), false);
     std::cout << "Wrote AST DOT to " << ast_dot_path.string() << "\n";
     std::cout << "Wrote CFG DOT to " << cfg_dot_path.string() << "\n";
+    std::cout << "Wrote IR ASM to " << ir_asm_path.string() << "\n";
+    std::cout << "Wrote optimized IR ASM to " << ir_opt_asm_path.string()
+              << "\n";
     PrintAnnotation(annotation);
     std::cout << "Result: " << compiler::interpreter::ValueToString(result)
               << "\n";
@@ -164,7 +210,7 @@ void PrintHelp() {
 }
 
 int RunREPL() {
-    std::cout << "Interpreter REPL (MiniLang proof-of-concept)\n";
+    std::cout << "Neon REPL\n";
     std::cout << "Type :help for commands.\n";
 
     std::string committed_source;
@@ -173,7 +219,7 @@ int RunREPL() {
 
     std::string line;
     while (true) {
-        std::cout << (pending_brace_balance == 0 ? "interp> " : "....> ")
+        std::cout << (pending_brace_balance == 0 ? "neon> " : "....> ")
                   << std::flush;
         if (!std::getline(std::cin, line)) {
             std::cout << "\n";

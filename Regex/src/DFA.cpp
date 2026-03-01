@@ -7,7 +7,8 @@
 
 namespace compiler::regex {
 namespace {
-bool MatchCharacterClass(const NFATransition &transition, unsigned char value) {
+bool MatchCharacterClass(const NFATransition &transition,
+                         const unsigned char value) {
     bool matched = false;
 
     for (const auto &item : transition.char_class_items) {
@@ -29,7 +30,7 @@ bool MatchCharacterClass(const NFATransition &transition, unsigned char value) {
 }
 
 bool TransitionMatchesByte(const NFATransition &transition,
-                           unsigned char value) {
+                           const unsigned char value) {
     switch (transition.type) {
     case NFATransition::Type::Epsilon:
         return false;
@@ -49,7 +50,7 @@ std::vector<std::size_t> EpsilonClosure(const NFA &nfa,
     std::vector<std::size_t> closure;
     closure.reserve(nfa.states.size());
 
-    std::vector<bool> visited(nfa.states.size(), false);
+    std::vector visited(nfa.states.size(), false);
     std::vector<std::size_t> stack;
     stack.reserve(seeds.size());
 
@@ -85,7 +86,7 @@ std::vector<std::size_t> EpsilonClosure(const NFA &nfa,
 
 std::vector<std::size_t> MoveOnByte(const NFA &nfa,
                                     const std::vector<std::size_t> &states,
-                                    unsigned char value) {
+                                    const unsigned char value) {
     std::vector<std::size_t> moved;
 
     for (std::size_t state : states) {
@@ -111,11 +112,12 @@ std::vector<std::size_t> MoveOnByte(const NFA &nfa,
     return moved;
 }
 
-bool ContainsState(const std::vector<std::size_t> &subset, std::size_t state) {
+bool ContainsState(const std::vector<std::size_t> &subset,
+                   const std::size_t state) {
     return std::binary_search(subset.begin(), subset.end(), state);
 }
 
-DFAState MakeDFAState(bool is_accepting) {
+DFAState MakeDFAState(const bool is_accepting) {
     DFAState state;
     state.transitions.fill(kInvalidDFAState);
     state.is_accepting = is_accepting;
@@ -183,11 +185,11 @@ DFA CompileNFAToDFA(const NFA &nfa) {
     return dfa;
 }
 
-DFA CompilePatternToDFA(std::string_view pattern) {
+DFA CompilePatternToDFA(const std::string_view pattern) {
     return CompileNFAToDFA(CompilePatternToNFA(pattern));
 }
 
-bool DFAMatches(const DFA &dfa, std::string_view input) {
+bool DFAMatches(const DFA &dfa, const std::string_view input) {
     if (dfa.start_state == kInvalidDFAState ||
         dfa.start_state >= dfa.states.size()) {
         return false;

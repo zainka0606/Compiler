@@ -1,0 +1,15 @@
+use Core;
+
+fn id(x) {
+  return x;
+}
+
+fn nestedPushCount(n) {
+  let out = [];
+  for (let i = 0; i < n; i += 1) {
+    push(out, id(i));
+  }
+  return len(out);
+}
+
+println(nestedPushCount(8));

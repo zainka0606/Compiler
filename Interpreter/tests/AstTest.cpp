@@ -47,6 +47,10 @@ int main(int argc, char **argv) {
         const std::string source = compiler::common::ReadTextFile(input_path);
         const compiler::interpreter::AST ast =
             compiler::interpreter::ParseProgram(source);
+        const compiler::ir::Program ir_program =
+            compiler::interpreter::CompileProgramToIR(ast);
+        compiler::ir::Program optimized_ir = ir_program;
+        compiler::ir::OptimizeProgram(optimized_ir);
         const compiler::interpreter::ProgramCFG cfg =
             compiler::interpreter::BuildProgramCFG(ast);
         compiler::common::WriteTextFile(
@@ -54,6 +58,17 @@ int main(int argc, char **argv) {
         compiler::common::WriteTextFile(
             cfg_output_path,
             compiler::interpreter::ProgramCFGToGraphvizDot(cfg));
+        const std::filesystem::path ir_output_path =
+            output_path.parent_path() / (output_path.stem().string() + ".ir.s");
+        const std::filesystem::path ir_opt_output_path =
+            output_path.parent_path() /
+            (output_path.stem().string() + ".opt.ir.s");
+        compiler::common::WriteTextFile(
+            ir_output_path,
+            compiler::ir::ProgramToAssembly(ir_program, input_path.string()));
+        compiler::common::WriteTextFile(
+            ir_opt_output_path,
+            compiler::ir::ProgramToAssembly(optimized_ir, input_path.string()));
 
         const compiler::interpreter::ProgramAnnotation annotation =
             compiler::interpreter::AnnotateProgram(ast);
@@ -62,6 +77,9 @@ int main(int argc, char **argv) {
 
         std::cout << "Wrote AST DOT to " << output_path.string() << "\n";
         std::cout << "Wrote CFG DOT to " << cfg_output_path.string() << "\n";
+        std::cout << "Wrote IR ASM to " << ir_output_path.string() << "\n";
+        std::cout << "Wrote optimized IR ASM to " << ir_opt_output_path.string()
+                  << "\n";
         std::cout << "Flattened items:\n";
         for (const std::string &line : annotation.flattened_items) {
             std::cout << "  - " << line << "\n";

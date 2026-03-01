@@ -1,0 +1,148 @@
+mod LinkedList;
+use Core;
+
+# Singly linked list backed by arrays of node values and next indices.
+
+let LINKED_LIST_EMPTY_INDEX = -1;
+
+class LinkedList {
+  values;
+  nextIndices;
+  headIndex;
+  tailIndex;
+  size;
+
+  LinkedList(values, nextIndices, headIndex, tailIndex, size) {
+    self.values = values;
+    self.nextIndices = nextIndices;
+    self.headIndex = headIndex;
+    self.tailIndex = tailIndex;
+    self.size = size;
+  }
+
+  fn count() {
+    return self.size;
+  }
+
+  fn isEmpty() {
+    return self.size == 0;
+  }
+
+  fn nodeIndexAt(index) {
+    if (index < 0 || index >= self.size) {
+      return LINKED_LIST_EMPTY_INDEX;
+    }
+
+    let cursor = self.headIndex;
+    let i = 0;
+    while (i < index && cursor != LINKED_LIST_EMPTY_INDEX) {
+      cursor = self.nextIndices[cursor];
+      i += 1;
+    }
+    return cursor;
+  }
+
+  fn append(value) {
+    let nodeIndex = len(self.values);
+    push(self.values, value);
+    push(self.nextIndices, LINKED_LIST_EMPTY_INDEX);
+
+    if (self.size == 0) {
+      self.headIndex = nodeIndex;
+      self.tailIndex = nodeIndex;
+    } else {
+      self.nextIndices[self.tailIndex] = nodeIndex;
+      self.tailIndex = nodeIndex;
+    }
+
+    self.size += 1;
+    return self.size;
+  }
+
+  fn prepend(value) {
+    let nodeIndex = len(self.values);
+    push(self.values, value);
+    push(self.nextIndices, self.headIndex);
+
+    self.headIndex = nodeIndex;
+    if (self.size == 0) {
+      self.tailIndex = nodeIndex;
+    }
+
+    self.size += 1;
+    return self.size;
+  }
+
+  fn get(index) {
+    let nodeIndex = self.nodeIndexAt(index);
+    if (nodeIndex == LINKED_LIST_EMPTY_INDEX) {
+      return 0;
+    }
+    return self.values[nodeIndex];
+  }
+
+  fn set(index, value) {
+    let nodeIndex = self.nodeIndexAt(index);
+    if (nodeIndex == LINKED_LIST_EMPTY_INDEX) {
+      return 0;
+    }
+    let oldValue = self.values[nodeIndex];
+    self.values[nodeIndex] = value;
+    return oldValue;
+  }
+
+  fn removeAt(index) {
+    if (index < 0 || index >= self.size) {
+      return 0;
+    }
+
+    let removedIndex = self.headIndex;
+    if (index == 0) {
+      self.headIndex = self.nextIndices[removedIndex];
+      if (self.size == 1) {
+        self.tailIndex = LINKED_LIST_EMPTY_INDEX;
+      }
+    } else {
+      let prevIndex = self.nodeIndexAt(index - 1);
+      removedIndex = self.nextIndices[prevIndex];
+      self.nextIndices[prevIndex] = self.nextIndices[removedIndex];
+      if (removedIndex == self.tailIndex) {
+        self.tailIndex = prevIndex;
+      }
+    }
+
+    self.size -= 1;
+    return self.values[removedIndex];
+  }
+
+  fn clear() {
+    self.values = [];
+    self.nextIndices = [];
+    self.headIndex = LINKED_LIST_EMPTY_INDEX;
+    self.tailIndex = LINKED_LIST_EMPTY_INDEX;
+    self.size = 0;
+    return 0;
+  }
+
+  fn toArray() {
+    let out = [];
+    let cursor = self.headIndex;
+    while (cursor != LINKED_LIST_EMPTY_INDEX) {
+      push(out, self.values[cursor]);
+      cursor = self.nextIndices[cursor];
+    }
+    return out;
+  }
+}
+
+fn linkedListNew() {
+  return new LinkedList([], [], LINKED_LIST_EMPTY_INDEX, LINKED_LIST_EMPTY_INDEX, 0);
+}
+
+fn linkedListFromArray(values) {
+  let out = linkedListNew();
+  for (let i = 0; i < len(values); i += 1) {
+    out.append(values[i]);
+  }
+  return out;
+}

@@ -1,0 +1,207 @@
+mod PNG;
+use Core;
+use Deflate;
+
+# PNG codec for 8-bit grayscale images.
+# Uses DEFLATE stored blocks via Deflate.neon helpers.
+
+fn pngAppendBytes(dst, src) {
+  for (let i = 0; i < len(src); i += 1) {
+    push(dst, src[i] & 0xFF);
+  }
+  return len(dst);
+}
+
+fn pngPushU32Be(dst, value) {
+  push(dst, (value >> 24) & 0xFF);
+  push(dst, (value >> 16) & 0xFF);
+  push(dst, (value >> 8) & 0xFF);
+  push(dst, value & 0xFF);
+  return len(dst);
+}
+
+fn pngReadU32Be(src, offset) {
+  return ((src[offset] << 24) | (src[offset + 1] << 16) |
+          (src[offset + 2] << 8) | src[offset + 3]) & 0xFFFFFFFF;
+}
+
+fn pngBytesFromText(text) {
+  let out = [];
+  for (let i = 0; i < len(text); i += 1) {
+    push(out, text[i] & 0xFF);
+  }
+  return out;
+}
+
+fn pngCrc32(bytes) {
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < len(bytes); i += 1) {
+    crc = crc ^ (bytes[i] & 0xFF);
+    for (let bit = 0; bit < 8; bit += 1) {
+      if ((crc & 1) != 0) {
+        crc = (crc >> 1) ^ 0xEDB88320;
+      } else {
+        crc = crc >> 1;
+      }
+      crc = crc & 0xFFFFFFFF;
+    }
+  }
+  return (crc ^ 0xFFFFFFFF) & 0xFFFFFFFF;
+}
+
+fn pngMakeChunk(type_text, data) {
+  let type_bytes = pngBytesFromText(type_text);
+
+  let crc_input = [];
+  pngAppendBytes(crc_input, type_bytes);
+  pngAppendBytes(crc_input, data);
+
+  let out = [];
+  pngPushU32Be(out, len(data));
+  pngAppendBytes(out, type_bytes);
+  pngAppendBytes(out, data);
+  pngPushU32Be(out, pngCrc32(crc_input));
+  return out;
+}
+
+fn pngSignatureOk(data) {
+  let sig = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+  if (len(data) < len(sig)) {
+    return false;
+  }
+  for (let i = 0; i < len(sig); i += 1) {
+    if ((data[i] & 0xFF) != sig[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+fn pngEncodeGrayscale(width, height, pixels) {
+  let raw = [];
+  for (let y = 0; y < height; y += 1) {
+    push(raw, 0);
+    for (let x = 0; x < width; x += 1) {
+      let idx = y * width + x;
+      let value = clamp(pixels[idx] // 1, 0, 0xFF);
+      push(raw, value);
+    }
+  }
+
+  let idat_payload = deflateZlibCompressStored(raw);
+
+  let ihdr = [];
+  pngPushU32Be(ihdr, width);
+  pngPushU32Be(ihdr, height);
+  push(ihdr, 0x08); # bit depth
+  push(ihdr, 0); # color type: grayscale
+  push(ihdr, 0); # compression method
+  push(ihdr, 0); # filter method
+  push(ihdr, 0); # interlace method
+
+  let png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+  pngAppendBytes(png, pngMakeChunk("IHDR", ihdr));
+  pngAppendBytes(png, pngMakeChunk("IDAT", idat_payload));
+  pngAppendBytes(png, pngMakeChunk("IEND", []));
+  return png;
+}
+
+fn pngDecodeGrayscale(png_bytes) {
+  if (!pngSignatureOk(png_bytes)) {
+    return [0, 0, []];
+  }
+
+  let pos = 8;
+  let width = 0;
+  let height = 0;
+  let saw_ihdr = false;
+  let idat_payload = [];
+
+  while (pos + 8 <= len(png_bytes)) {
+    let chunk_len = pngReadU32Be(png_bytes, pos);
+    pos += 4;
+
+    if (pos + 4 + chunk_len + 4 > len(png_bytes)) {
+      return [0, 0, []];
+    }
+
+    let t0 = png_bytes[pos] & 0xFF;
+    let t1 = png_bytes[pos + 1] & 0xFF;
+    let t2 = png_bytes[pos + 2] & 0xFF;
+    let t3 = png_bytes[pos + 3] & 0xFF;
+    pos += 4;
+
+    let chunk_data = [];
+    for (let i = 0; i < chunk_len; i += 1) {
+      push(chunk_data, png_bytes[pos + i] & 0xFF);
+    }
+    pos += chunk_len;
+
+    let expected_crc = pngReadU32Be(png_bytes, pos);
+    pos += 4;
+
+    let crc_input = [t0, t1, t2, t3];
+    pngAppendBytes(crc_input, chunk_data);
+    if (pngCrc32(crc_input) != expected_crc) {
+      return [0, 0, []];
+    }
+
+    if (t0 == 0x49 && t1 == 0x48 && t2 == 0x44 && t3 == 0x52) {
+      if (chunk_len != 13) {
+        return [0, 0, []];
+      }
+      width = pngReadU32Be(chunk_data, 0);
+      height = pngReadU32Be(chunk_data, 4);
+      let bit_depth = chunk_data[8] & 0xFF;
+      let color_type = chunk_data[9] & 0xFF;
+      let compression_method = chunk_data[10] & 0xFF;
+      let filter_method = chunk_data[11] & 0xFF;
+      let interlace_method = chunk_data[12] & 0xFF;
+      if (bit_depth != 0x08 || color_type != 0 || compression_method != 0 ||
+          filter_method != 0 || interlace_method != 0) {
+        return [0, 0, []];
+      }
+      saw_ihdr = true;
+    } else {
+      if (t0 == 0x49 && t1 == 0x44 && t2 == 0x41 && t3 == 0x54) {
+        pngAppendBytes(idat_payload, chunk_data);
+      } else {
+        if (t0 == 0x49 && t1 == 0x45 && t2 == 0x4E && t3 == 0x44) {
+          break;
+        }
+      }
+    }
+  }
+
+  if (!saw_ihdr || width <= 0 || height <= 0) {
+    return [0, 0, []];
+  }
+
+  let raw = deflateZlibDecompressStored(idat_payload);
+  let stride = width + 1;
+  if (len(raw) != height * stride) {
+    return [0, 0, []];
+  }
+
+  let pixels = [];
+  for (let y = 0; y < height; y += 1) {
+    let row_base = y * stride;
+    let filter_type = raw[row_base] & 0xFF;
+    if (filter_type != 0) {
+      return [0, 0, []];
+    }
+    for (let x = 0; x < width; x += 1) {
+      push(pixels, raw[row_base + 1 + x] & 0xFF);
+    }
+  }
+
+  return [width, height, pixels];
+}
+
+fn pngWriteGrayscale(path, width, height, pixels) {
+  return write_binary_file(path, pngEncodeGrayscale(width, height, pixels));
+}
+
+fn pngReadGrayscale(path) {
+  return pngDecodeGrayscale(read_binary_file(path));
+}

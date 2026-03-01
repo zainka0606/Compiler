@@ -1,0 +1,57 @@
+use Core;
+
+class Shape {
+    fn name() {
+        return "shape";
+    }
+
+    fn area() {
+        return 0;
+    }
+}
+
+class Rectangle : Shape {
+    width;
+    height;
+
+    Rectangle(width, height) {
+        self.width = width;
+        self.height = height;
+    }
+
+    fn name() {
+        return "rectangle";
+    }
+
+    fn area() {
+        return self.width * self.height;
+    }
+}
+
+class Circle : Shape {
+    radius;
+
+    Circle(radius) {
+        self.radius = radius;
+    }
+
+    fn name() {
+        return "circle";
+    }
+
+    fn area() {
+        return 3.1415926535 * self.radius * self.radius;
+    }
+}
+
+fn run() {
+    let shapes = [new Rectangle(20, 10), new Circle(3)];
+    let i = 0;
+    while (i < len(shapes)) {
+        let shape: Shape = shapes[i];
+        println(f"{shape.name()} area = {shape.area()}");
+        i += 1;
+    }
+}
+
+run();

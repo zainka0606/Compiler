@@ -15,7 +15,7 @@ namespace {
 using GeneratedToken = detail::Token;
 using GeneratedTokenKind = detail::LR1SpecTokenKind;
 
-const char *TokenKindName(GeneratedTokenKind kind) {
+const char *TokenKindName(const GeneratedTokenKind kind) {
     switch (kind) {
     case GeneratedTokenKind::KW_GRAMMAR:
         return "grammar";
@@ -41,7 +41,7 @@ const char *TokenKindName(GeneratedTokenKind kind) {
 
 class Parser {
   public:
-    explicit Parser(std::string_view source_text) {
+    explicit Parser(const std::string_view source_text) {
         try {
             detail::LR1SpecLexer lexer(source_text);
             tokens_ = lexer.Tokenize();
@@ -144,11 +144,11 @@ class Parser {
         return tokens_[index_ - 1];
     }
 
-    [[nodiscard]] bool Check(GeneratedTokenKind kind) const {
+    [[nodiscard]] bool Check(const GeneratedTokenKind kind) const {
         return Current().kind == kind;
     }
 
-    bool Match(GeneratedTokenKind kind) {
+    bool Match(const GeneratedTokenKind kind) {
         if (!Check(kind)) {
             return false;
         }
@@ -158,7 +158,7 @@ class Parser {
 
     const GeneratedToken &Advance() {
         const GeneratedToken &token = Current();
-        if ((index_ + 1) < tokens_.size()) {
+        if (index_ + 1 < tokens_.size()) {
             ++index_;
         }
         return token;
@@ -169,7 +169,7 @@ class Parser {
         throw ParseException(token.offset, token.line, token.column, message);
     }
 
-    const GeneratedToken &Expect(GeneratedTokenKind kind,
+    const GeneratedToken &Expect(const GeneratedTokenKind kind,
                                  const std::string &message) {
         if (!Check(kind)) {
             std::string full = message;
@@ -215,8 +215,8 @@ class Parser {
 };
 } // namespace
 
-ParseException::ParseException(std::size_t offset, std::size_t line,
-                               std::size_t column, std::string message)
+ParseException::ParseException(const std::size_t offset, const std::size_t line,
+                               const std::size_t column, std::string message)
     : std::runtime_error(std::move(message)), offset_(offset), line_(line),
       column_(column) {}
 
@@ -226,7 +226,7 @@ std::size_t ParseException::line() const noexcept { return line_; }
 
 std::size_t ParseException::column() const noexcept { return column_; }
 
-GrammarSpecAST ParseGrammarSpec(std::string_view source_text) {
+GrammarSpecAST ParseGrammarSpec(const std::string_view source_text) {
     Parser parser(source_text);
     return parser.ParseFile();
 }
@@ -263,28 +263,28 @@ std::string ToDebugString(const GrammarSpecAST &spec) {
 }
 
 std::string GrammarSpecASTToGraphvizDot(const GrammarSpecAST &spec,
-                                        std::string_view graph_name) {
+                                        const std::string_view graph_name) {
     std::ostringstream oss;
     oss << "digraph "
-        << compiler::common::SanitizeIdentifier(graph_name, "grammar_ast")
+        << common::SanitizeIdentifier(graph_name, "grammar_ast")
         << " {\n";
     oss << "  rankdir=TB;\n";
     oss << "  node [shape=box];\n";
 
     std::size_t next_id = 0;
-    auto node_name = [&](std::size_t id) { return "n" + std::to_string(id); };
-    auto add_node = [&](std::string_view label) -> std::size_t {
+    auto node_name = [&](const std::size_t id) { return "n" + std::to_string(id); };
+    auto add_node = [&](const std::string_view label) -> std::size_t {
         const std::size_t id = next_id++;
         oss << "  " << node_name(id) << " [label=\""
-            << compiler::common::EscapeGraphvizLabel(label) << "\"];\n";
+            << common::EscapeGraphvizLabel(label) << "\"];\n";
         return id;
     };
-    auto add_edge = [&](std::size_t from, std::size_t to) {
+    auto add_edge = [&](const std::size_t from, const std::size_t to) {
         oss << "  " << node_name(from) << " -> " << node_name(to) << ";\n";
     };
 
-    auto make_label = [](std::string_view name,
-                         std::initializer_list<std::string> props = {}) {
+    auto make_label = [](const std::string_view name,
+                         const std::initializer_list<std::string> props = {}) {
         std::string label(name);
         for (const auto &prop : props) {
             if (!prop.empty()) {

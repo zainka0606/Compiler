@@ -3,8 +3,8 @@
 #include <cctype>
 
 namespace compiler::common {
-std::string SanitizeIdentifier(std::string_view text,
-                               std::string_view fallback) {
+std::string SanitizeIdentifier(const std::string_view text,
+                               const std::string_view fallback) {
     std::string out;
     out.reserve(text.size());
     for (char c : text) {

@@ -14,7 +14,7 @@ struct SourcePos {
     std::size_t column = 1;
 };
 
-std::string QuoteForMessage(std::string_view text) {
+std::string QuoteForMessage(const std::string_view text) {
     std::string out = "\"";
     for (char c : text) {
         switch (c) {
@@ -58,7 +58,7 @@ struct Token {
     SourcePos pos;
 };
 
-const char *TokenKindName(TokenKind kind) {
+const char *TokenKindName(const TokenKind kind) {
     switch (kind) {
     case TokenKind::Identifier:
         return "identifier";
@@ -80,7 +80,7 @@ const char *TokenKindName(TokenKind kind) {
 
 class Lexer {
   public:
-    explicit Lexer(std::string_view input) : input_(input) {}
+    explicit Lexer(const std::string_view input) : input_(input) {}
 
     std::vector<Token> LexAll() {
         std::vector<Token> tokens;
@@ -110,7 +110,7 @@ class Lexer {
     }
 
     [[nodiscard]] char PeekNext() const noexcept {
-        return (index_ + 1) < input_.size() ? input_[index_ + 1] : '\0';
+        return index_ + 1 < input_.size() ? input_[index_ + 1] : '\0';
     }
 
     [[nodiscard]] SourcePos Pos() const noexcept {
@@ -330,7 +330,7 @@ class Parser {
             }
             if (keyword.text == "token" || keyword.text == "skip") {
                 RuleDefinition rule;
-                rule.skip = (keyword.text == "skip");
+                rule.skip = keyword.text == "skip";
                 rule.name =
                     Expect(TokenKind::Identifier, "expected rule name").text;
                 Expect(TokenKind::Equal, "expected '=' after rule name");
@@ -357,7 +357,7 @@ class Parser {
 
     [[nodiscard]] const Token &Current() const { return tokens_[index_]; }
 
-    [[nodiscard]] bool Check(TokenKind kind) const {
+    [[nodiscard]] bool Check(const TokenKind kind) const {
         return Current().kind == kind;
     }
 
@@ -374,7 +374,7 @@ class Parser {
                                  token.pos.column, message);
     }
 
-    const Token &Expect(TokenKind kind, const std::string &message) {
+    const Token &Expect(const TokenKind kind, const std::string &message) {
         if (!Check(kind)) {
             Error(Current(), message + " (found " +
                                  std::string(TokenKindName(Current().kind)) +
@@ -423,8 +423,9 @@ std::string PatternDebugText(const PatternSource &pattern) {
 }
 } // namespace
 
-SpecParseException::SpecParseException(std::size_t offset, std::size_t line,
-                                       std::size_t column, std::string message)
+SpecParseException::SpecParseException(const std::size_t offset,
+                                       const std::size_t line,
+                                       const std::size_t column, std::string message)
     : std::runtime_error(std::move(message)), offset_(offset), line_(line),
       column_(column) {}
 
@@ -434,7 +435,7 @@ std::size_t SpecParseException::line() const noexcept { return line_; }
 
 std::size_t SpecParseException::column() const noexcept { return column_; }
 
-LexerSpecAST ParseLexerSpec(std::string_view source_text) {
+LexerSpecAST ParseLexerSpec(const std::string_view source_text) {
     Lexer lexer(source_text);
     Parser parser(lexer.LexAll());
     return parser.Parse();

@@ -1,0 +1,73 @@
+mod IO;
+use Core;
+
+# File and text helpers built on top of core file primitives.
+
+fn isWhitespaceChar(ch) {
+  return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
+}
+
+fn splitWhitespace(text) {
+  let tokens = [];
+  let current = "";
+  for (let i = 0; i < len(text); i += 1) {
+    let ch = text[i];
+    if (isWhitespaceChar(ch)) {
+      if (len(current) > 0) {
+        push(tokens, current);
+        current = "";
+      }
+    } else {
+      current = stringConcat(current, ch);
+    }
+  }
+  if (len(current) > 0) {
+    push(tokens, current);
+  }
+  return tokens;
+}
+
+fn readLines(path) {
+  let text = read_file(path);
+  let lines = [];
+  let current = "";
+
+  for (let i = 0; i < len(text); i += 1) {
+    let ch = text[i];
+    if (ch == '\n') {
+      push(lines, current);
+      current = "";
+    } else {
+      if (ch != '\r') {
+        current = stringConcat(current, ch);
+      }
+    }
+  }
+
+  if (len(text) == 0 || text[len(text) - 1] != '\n') {
+    push(lines, current);
+  }
+
+  return lines;
+}
+
+fn writeLines(path, lines) {
+  let content = joinText(lines, "\n");
+  write_file(path, content);
+  return len(lines);
+}
+
+fn appendLines(path, lines) {
+  if (len(lines) == 0) {
+    return 0;
+  }
+
+  let content = joinText(lines, "\n");
+  if (file_exists(path) && file_size(path) > 0) {
+    append_file(path, stringConcat("\n", content));
+  } else {
+    append_file(path, content);
+  }
+
+  return len(lines);
+}

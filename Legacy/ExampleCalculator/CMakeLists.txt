@@ -1,0 +1,126 @@
+set(EXAMPLE_CALCULATOR_GRAMMAR_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/ExampleCalculator.pg")
+set(EXAMPLE_CALCULATOR_GRAMMAR_BUILD "${CMAKE_CURRENT_BINARY_DIR}/ExampleCalculator.pg")
+set(EXAMPLE_CALCULATOR_INPUT_LEXER_SPEC_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/ExampleInputLexer.lex")
+set(EXAMPLE_CALCULATOR_INPUT_LEXER_SPEC_BUILD "${CMAKE_CURRENT_BINARY_DIR}/ExampleInputLexer.lex")
+set(EXAMPLE_CALCULATOR_INPUT_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/Input.neon")
+set(EXAMPLE_CALCULATOR_INPUT_BUILD "${CMAKE_CURRENT_BINARY_DIR}/Input.neon")
+
+set(EXAMPLE_CALCULATOR_PARSER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/ExampleCalculator")
+set(EXAMPLE_CALCULATOR_GENERATED_PARSER_HEADER "${EXAMPLE_CALCULATOR_PARSER_OUTPUT_DIR}/GeneratedParser.h")
+set(EXAMPLE_CALCULATOR_GENERATED_PARSER_SOURCE "${EXAMPLE_CALCULATOR_PARSER_OUTPUT_DIR}/GeneratedParser.cpp")
+set(EXAMPLE_CALCULATOR_GRAMMAR_AST_DOT "${EXAMPLE_CALCULATOR_PARSER_OUTPUT_DIR}/AST.dot")
+set(EXAMPLE_CALCULATOR_GRAMMAR_COLLECTION_DOT "${EXAMPLE_CALCULATOR_PARSER_OUTPUT_DIR}/CanonicalCollection.dot")
+set(EXAMPLE_CALCULATOR_GRAMMAR_TABLE_DOT "${EXAMPLE_CALCULATOR_PARSER_OUTPUT_DIR}/ParseTable.dot")
+
+set(EXAMPLE_CALCULATOR_INPUT_LEXER_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/ExampleInputLexer")
+set(EXAMPLE_CALCULATOR_INPUT_LEXER_GENERATED_HEADER "${EXAMPLE_CALCULATOR_INPUT_LEXER_GENERATED_DIR}/ExampleInputLexer.h")
+set(EXAMPLE_CALCULATOR_INPUT_LEXER_GENERATED_SOURCE "${EXAMPLE_CALCULATOR_INPUT_LEXER_GENERATED_DIR}/ExampleInputLexer.cpp")
+
+set(EXAMPLE_CALCULATOR_RUNTIME_CST_DOT "${CMAKE_CURRENT_BINARY_DIR}/CST.dot")
+set(EXAMPLE_CALCULATOR_RUNTIME_AST_DOT "${CMAKE_CURRENT_BINARY_DIR}/AST.dot")
+
+compiler_add_copy_file_command(
+        OUTPUT "${EXAMPLE_CALCULATOR_INPUT_BUILD}"
+        SOURCE "${EXAMPLE_CALCULATOR_INPUT_SOURCE}"
+        COMMENT "Copying ExampleCalculator input file"
+)
+
+compiler_add_lexer_generator_command(
+        SPEC_SOURCE "${EXAMPLE_CALCULATOR_INPUT_LEXER_SPEC_SOURCE}"
+        SPEC_BUILD "${EXAMPLE_CALCULATOR_INPUT_LEXER_SPEC_BUILD}"
+        OUTPUT_HEADER "${EXAMPLE_CALCULATOR_INPUT_LEXER_GENERATED_HEADER}"
+        OUTPUT_SOURCE "${EXAMPLE_CALCULATOR_INPUT_LEXER_GENERATED_SOURCE}"
+        COMMENT "Generating ExampleCalculator input lexer from ExampleInputLexer.lex"
+)
+
+compiler_add_parser_generator_command(
+        SPEC_SOURCE "${EXAMPLE_CALCULATOR_GRAMMAR_SOURCE}"
+        SPEC_BUILD "${EXAMPLE_CALCULATOR_GRAMMAR_BUILD}"
+        OUTPUT_HEADER "${EXAMPLE_CALCULATOR_GENERATED_PARSER_HEADER}"
+        OUTPUT_SOURCE "${EXAMPLE_CALCULATOR_GENERATED_PARSER_SOURCE}"
+        OUTPUT_AST "${EXAMPLE_CALCULATOR_GRAMMAR_AST_DOT}"
+        OUTPUT_COLLECTION "${EXAMPLE_CALCULATOR_GRAMMAR_COLLECTION_DOT}"
+        OUTPUT_TABLE "${EXAMPLE_CALCULATOR_GRAMMAR_TABLE_DOT}"
+        EXTRA_ARGS
+        --header "GeneratedParser.h"
+        --source "GeneratedParser.cpp"
+        COMMENT "Generating ExampleCalculator parser and LR(1) dumps from ExampleCalculator.pg"
+)
+
+set_source_files_properties(
+        "${EXAMPLE_CALCULATOR_GENERATED_PARSER_HEADER}"
+        "${EXAMPLE_CALCULATOR_GENERATED_PARSER_SOURCE}"
+        "${EXAMPLE_CALCULATOR_GRAMMAR_AST_DOT}"
+        "${EXAMPLE_CALCULATOR_GRAMMAR_COLLECTION_DOT}"
+        "${EXAMPLE_CALCULATOR_GRAMMAR_TABLE_DOT}"
+        "${EXAMPLE_CALCULATOR_INPUT_LEXER_GENERATED_HEADER}"
+        "${EXAMPLE_CALCULATOR_INPUT_LEXER_GENERATED_SOURCE}"
+        PROPERTIES GENERATED TRUE
+)
+
+add_custom_target(ExampleCalculatorCodegen
+        DEPENDS
+        "${EXAMPLE_CALCULATOR_GENERATED_PARSER_HEADER}"
+        "${EXAMPLE_CALCULATOR_GENERATED_PARSER_SOURCE}"
+        "${EXAMPLE_CALCULATOR_GRAMMAR_AST_DOT}"
+        "${EXAMPLE_CALCULATOR_GRAMMAR_COLLECTION_DOT}"
+        "${EXAMPLE_CALCULATOR_GRAMMAR_TABLE_DOT}"
+)
+
+add_custom_target(ExampleCalculatorInput
+        DEPENDS
+        "${EXAMPLE_CALCULATOR_INPUT_BUILD}"
+)
+
+add_custom_target(ExampleCalculatorInputLexerCodegen
+        DEPENDS
+        "${EXAMPLE_CALCULATOR_INPUT_LEXER_GENERATED_HEADER}"
+        "${EXAMPLE_CALCULATOR_INPUT_LEXER_GENERATED_SOURCE}"
+)
+
+add_executable(ExampleCalculator
+        Calculator.cpp
+        "${EXAMPLE_CALCULATOR_GENERATED_PARSER_SOURCE}"
+        "${EXAMPLE_CALCULATOR_INPUT_LEXER_GENERATED_SOURCE}"
+)
+
+add_dependencies(ExampleCalculator
+        ExampleCalculatorCodegen
+        ExampleCalculatorInputLexerCodegen
+)
+
+target_link_libraries(ExampleCalculator
+        PRIVATE
+        ParserGenerator
+        Common
+)
+
+target_include_directories(ExampleCalculator
+        PRIVATE
+        "${EXAMPLE_CALCULATOR_PARSER_OUTPUT_DIR}"
+        "${EXAMPLE_CALCULATOR_INPUT_LEXER_GENERATED_DIR}"
+)
+
+add_custom_target(ExampleCalculatorRun
+        COMMAND "$<TARGET_FILE:ExampleCalculator>"
+        DEPENDS
+        ExampleCalculator
+        ExampleCalculatorCodegen
+        ExampleCalculatorInputLexerCodegen
+        USES_TERMINAL
+        VERBATIM
+)
+
+add_custom_target(ExampleCalculatorSampleRun
+        COMMAND "$<TARGET_FILE:ExampleCalculator>"
+        "${EXAMPLE_CALCULATOR_INPUT_BUILD}"
+        "${EXAMPLE_CALCULATOR_RUNTIME_CST_DOT}"
+        "${EXAMPLE_CALCULATOR_RUNTIME_AST_DOT}"
+        DEPENDS
+        ExampleCalculator
+        ExampleCalculatorCodegen
+        ExampleCalculatorInput
+        ExampleCalculatorInputLexerCodegen
+        USES_TERMINAL
+        VERBATIM
+)

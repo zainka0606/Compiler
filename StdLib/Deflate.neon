@@ -1,0 +1,157 @@
+mod Deflate;
+
+# DEFLATE helpers.
+# This implementation supports stored (uncompressed) DEFLATE blocks.
+
+fn deflatePushU32Be(dst, value) {
+  __array_push(dst, (value >> 24) & 0xFF);
+  __array_push(dst, (value >> 16) & 0xFF);
+  __array_push(dst, (value >> 8) & 0xFF);
+  __array_push(dst, value & 0xFF);
+  return len(dst);
+}
+
+fn deflateReadU32Be(src, offset) {
+  return ((src[offset] << 24) | (src[offset + 1] << 16) |
+          (src[offset + 2] << 8) | src[offset + 3]) & 0xFFFFFFFF;
+}
+
+fn deflateAdler32(bytes) {
+  let a = 1;
+  let b = 0;
+  let n = len(bytes);
+  for (let i = 0; i < n; i += 1) {
+    a = (a + (bytes[i] & 0xFF)) % 65521;
+    b = (b + a) % 65521;
+  }
+  return ((b << 16) | a) & 0xFFFFFFFF;
+}
+
+fn deflateCompressStored(data) {
+  let out = [];
+  let total = len(data);
+
+  if (total == 0) {
+    __array_push(out, 1);
+    __array_push(out, 0);
+    __array_push(out, 0);
+    __array_push(out, 0xFF);
+    __array_push(out, 0xFF);
+    return out;
+  }
+
+  let pos = 0;
+  while (pos < total) {
+    let remaining = total - pos;
+    let block_len = remaining > 0xFFFF ? 0xFFFF : remaining;
+    let bfinal = pos + block_len >= total ? 1 : 0;
+
+    # Block header: BFINAL + BTYPE=00 (stored), padded to byte boundary.
+    __array_push(out, bfinal);
+
+    let nlen = 0xFFFF - block_len;
+    __array_push(out, block_len & 0xFF);
+    __array_push(out, (block_len >> 8) & 0xFF);
+    __array_push(out, nlen & 0xFF);
+    __array_push(out, (nlen >> 8) & 0xFF);
+
+    for (let i = 0; i < block_len; i += 1) {
+      __array_push(out, data[pos + i] & 0xFF);
+    }
+
+    pos += block_len;
+  }
+
+  return out;
+}
+
+fn deflateDecompressStoredRange(data, start, end) {
+  let out = [];
+  let pos = start;
+
+  while (pos < end) {
+    if (pos + 5 > end) {
+      return [];
+    }
+
+    let header = data[pos] & 0xFF;
+    pos += 1;
+
+    let bfinal = header & 1;
+    let btype = (header >> 1) & 0b11;
+
+    # Stored-only decoder.
+    if (btype != 0) {
+      return [];
+    }
+    if ((header & 0b11111000) != 0) {
+      return [];
+    }
+
+    let block_len = (data[pos] & 0xFF) | ((data[pos + 1] & 0xFF) << 8);
+    let nlen = (data[pos + 2] & 0xFF) | ((data[pos + 3] & 0xFF) << 8);
+    pos += 4;
+
+    if (((block_len ^ nlen) & 0xFFFF) != 0xFFFF) {
+      return [];
+    }
+
+    if (pos + block_len > end) {
+      return [];
+    }
+
+    for (let i = 0; i < block_len; i += 1) {
+      __array_push(out, data[pos + i] & 0xFF);
+    }
+    pos += block_len;
+
+    if (bfinal == 1) {
+      return out;
+    }
+  }
+
+  return out;
+}
+
+fn deflateDecompressStored(data) {
+  return deflateDecompressStoredRange(data, 0, len(data));
+}
+
+fn deflateZlibCompressStored(data) {
+  let out = [0x78, 0x01];
+  let compressed = deflateCompressStored(data);
+  let compressed_len = len(compressed);
+  for (let i = 0; i < compressed_len; i += 1) {
+    __array_push(out, compressed[i]);
+  }
+  deflatePushU32Be(out, deflateAdler32(data));
+  return out;
+}
+
+fn deflateZlibDecompressStored(zlib_data) {
+  let n = len(zlib_data);
+  if (n < 6) {
+    return [];
+  }
+
+  let cmf = zlib_data[0] & 0xFF;
+  let flg = zlib_data[1] & 0xFF;
+
+  if ((cmf & 0x0F) != 0x08) {
+    return [];
+  }
+  if ((((cmf << 8) | flg) % 0x1F) != 0) {
+    return [];
+  }
+  if ((flg & 0x20) != 0) {
+    return [];
+  }
+
+  let decoded = deflateDecompressStoredRange(zlib_data, 2, n - 4);
+  let expected_adler = deflateReadU32Be(zlib_data, n - 4);
+  if (deflateAdler32(decoded) != expected_adler) {
+    return [];
+  }
+
+  return decoded;
+}

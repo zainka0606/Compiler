@@ -19,7 +19,8 @@ std::string ReadTextFile(const std::filesystem::path &path) {
     return buffer.str();
 }
 
-void WriteTextFile(const std::filesystem::path &path, std::string_view text) {
+void WriteTextFile(const std::filesystem::path &path,
+                   const std::string_view text) {
     if (path.has_parent_path()) {
         std::filesystem::create_directories(path.parent_path());
     }

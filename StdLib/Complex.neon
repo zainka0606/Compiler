@@ -1,0 +1,89 @@
+mod Complex;
+
+# Complex numbers and complex analysis helpers.
+
+class Complex {
+  re;
+  im;
+
+  Complex(re, im) {
+    self.re = re;
+    self.im = im;
+  }
+
+  fn __add__(other) {
+    return new Complex(self.re + other.re, self.im + other.im);
+  }
+
+  fn __sub__(other) {
+    return new Complex(self.re - other.re, self.im - other.im);
+  }
+
+  fn __mul__(other) {
+    return new Complex(
+      self.re * other.re - self.im * other.im,
+      self.re * other.im + self.im * other.re
+    );
+  }
+
+  fn __div__(other) {
+    let denom = other.re * other.re + other.im * other.im;
+    return new Complex(
+      (self.re * other.re + self.im * other.im) / denom,
+      (self.im * other.re - self.re * other.im) / denom
+    );
+  }
+
+  fn __neg__() {
+    return new Complex(-self.re, -self.im);
+  }
+
+  fn __eq__(other) {
+    return self.re == other.re ? self.im == other.im : false;
+  }
+
+  fn abs2() {
+    return self.re * self.re + self.im * self.im;
+  }
+
+  fn abs() {
+    return sqrt(self.abs2());
+  }
+
+  fn conj() {
+    return new Complex(self.re, -self.im);
+  }
+}
+
+fn complexFromPolar(r, theta) {
+  return new Complex(r * cos(theta), r * sin(theta));
+}
+
+fn complexExp(z) {
+  let ea = exp(z.re);
+  return new Complex(ea * cos(z.im), ea * sin(z.im));
+}
+
+fn complexSqrt(z) {
+  let r = sqrt(z.re * z.re + z.im * z.im);
+  let real_part = sqrt((r + z.re) / 2);
+  let imag_mag = sqrt((r - z.re) / 2);
+  let imag_part = z.im < 0 ? -imag_mag : imag_mag;
+  return new Complex(real_part, imag_part);
+}
+
+fn complexSinh(z) {
+  return (complexExp(z) - complexExp(-z)) / new Complex(2, 0);
+}
+
+fn complexCosh(z) {
+  return (complexExp(z) + complexExp(-z)) / new Complex(2, 0);
+}
+
+fn complexSin(z) {
+  return new Complex(sin(z.re) * cosh(z.im), cos(z.re) * sinh(z.im));
+}
+
+fn complexCos(z) {
+  return new Complex(cos(z.re) * cosh(z.im), -sin(z.re) * sinh(z.im));
+}

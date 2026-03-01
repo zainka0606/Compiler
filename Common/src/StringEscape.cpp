@@ -2,7 +2,7 @@
 
 namespace compiler::common {
 
-std::string EscapeForCppString(std::string_view text) {
+std::string EscapeForCppString(const std::string_view text) {
     std::string out;
     out.reserve(text.size() * 2);
     for (char c : text) {

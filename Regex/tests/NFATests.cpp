@@ -16,13 +16,13 @@ using compiler::regex::ParseException;
 
 void Fail(std::string message) { throw std::runtime_error(std::move(message)); }
 
-void ExpectTrue(bool condition, std::string_view message) {
+void ExpectTrue(const bool condition, const std::string_view message) {
     if (!condition) {
         Fail(std::string(message));
     }
 }
 
-void ExpectMatch(std::string_view pattern, std::string_view input) {
+void ExpectMatch(const std::string_view pattern, const std::string_view input) {
     const NFA nfa = CompilePatternToNFA(pattern);
     if (!NFAMatches(nfa, input)) {
         std::ostringstream oss;
@@ -32,7 +32,8 @@ void ExpectMatch(std::string_view pattern, std::string_view input) {
     }
 }
 
-void ExpectNoMatch(std::string_view pattern, std::string_view input) {
+void ExpectNoMatch(const std::string_view pattern,
+                   const std::string_view input) {
     const NFA nfa = CompilePatternToNFA(pattern);
     if (NFAMatches(nfa, input)) {
         std::ostringstream oss;
@@ -42,7 +43,7 @@ void ExpectNoMatch(std::string_view pattern, std::string_view input) {
     }
 }
 
-void ExpectInvalidPattern(std::string_view pattern) {
+void ExpectInvalidPattern(const std::string_view pattern) {
     try {
         (void)CompilePatternToNFA(pattern);
         Fail(std::string("expected parse failure for pattern '") +

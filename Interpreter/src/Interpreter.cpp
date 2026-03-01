@@ -1,14 +1,14 @@
 #include "Common/FileIO.h"
+#include "Common/NumberParsing.h"
 #include "Interpreter.h"
 
 #include "GeneratedParser.h"
-#include "LanguageLexer.h"
+#include "NeonLexer.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstdint>
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -26,11 +26,11 @@ namespace compiler::interpreter {
 
 namespace {
 
-using GeneratedLexer = detail::LanguageLexer;
+using GeneratedLexer = detail::NeonLexer;
 using GeneratedToken = detail::Token;
-using GeneratedTokenKind = detail::LanguageTokenKind;
-using GeneratedParser = generated::MiniLangInterpreter::MiniLangInterpreterParser;
-namespace gen = generated::MiniLangInterpreter::ast;
+using GeneratedTokenKind = detail::NeonTokenKind;
+using GeneratedParser = generated::Neon::NeonParser;
+namespace gen = generated::Neon::ast;
 
 const char* TerminalNameForToken(GeneratedTokenKind kind) {
     switch (kind) {
@@ -62,6 +62,10 @@ const char* TerminalNameForToken(GeneratedTokenKind kind) {
             return "KW_TRUE";
         case GeneratedTokenKind::KW_FALSE:
             return "KW_FALSE";
+        case GeneratedTokenKind::KW_AS:
+            return "KW_AS";
+        case GeneratedTokenKind::KW_NEW:
+            return "KW_NEW";
         case GeneratedTokenKind::ID:
             return "ID";
         case GeneratedTokenKind::FSTRING:
@@ -192,13 +196,11 @@ const gen::Program& RequireProgram(const AST& ast) {
 }
 
 double ParseNumberFromText(std::string_view text, std::string_view context) {
-    std::string copy(text);
-    char* end = nullptr;
-    const double value = std::strtod(copy.c_str(), &end);
-    if (end == nullptr || *end != '\0') {
-        throw InterpreterException(std::string("invalid number in ") + std::string(context) + ": " + copy);
+    try {
+        return compiler::common::ParseNumericLiteral(text, context);
+    } catch (const std::exception& ex) {
+        throw InterpreterException(ex.what());
     }
-    return value;
 }
 
 std::string DecodeEscapedText(std::string_view text, std::string_view context) {
@@ -258,7 +260,7 @@ std::string AsString(const Value& value) {
     if (const auto* character = std::get_if<char>(&value)) {
         return std::string(1, *character);
     }
-    return ValueToString(value);
+    return compiler::ir::ValueToString(value);
 }
 
 std::string NumberToString(double value) {
@@ -276,16 +278,47 @@ std::string ObjectToString(const ObjectInstancePtr& object) {
 
     std::ostringstream out;
     out << object->class_name << "{";
-    bool first = true;
-    for (const auto& [field_name, field_value] : object->fields) {
-        if (!first) {
-            out << ", ";
+    if (object->class_layout != nullptr) {
+        for (std::size_t i = 0; i < object->class_layout->fields.size(); ++i) {
+            if (i != 0) {
+                out << ", ";
+            }
+            out << object->class_layout->fields[i] << "=";
+            if (i < object->memory.size()) {
+                out << ValueToStringInternal(object->memory[i]);
+            } else {
+                out << "<undef>";
+            }
         }
-        first = false;
-        out << field_name << "=" << ValueToStringInternal(field_value);
+    } else {
+        for (std::size_t i = 0; i < object->memory.size(); ++i) {
+            if (i != 0) {
+                out << ", ";
+            }
+            out << "#" << i << "=" << ValueToStringInternal(object->memory[i]);
+        }
     }
     out << "}";
     return out.str();
+}
+
+std::size_t ResolveLegacyFieldIndex(const SymbolTable& symbols, const ObjectInstancePtr& object,
+                                    std::string_view field_name,
+                                    std::string_view context) {
+    if (!object) {
+        throw InterpreterException(std::string(context) + ": null object");
+    }
+    const SymbolTable::ClassInfo* class_info = symbols.FindClass(object->class_name);
+    if (class_info == nullptr) {
+        throw InterpreterException(std::string(context) + ": unknown class '" + object->class_name + "'");
+    }
+    for (std::size_t i = 0; i < class_info->field_names.size(); ++i) {
+        if (class_info->field_names[i] == field_name) {
+            return i;
+        }
+    }
+    throw InterpreterException(std::string(context) + ": unknown field '" + std::string(field_name) +
+                               "' on type '" + object->class_name + "'");
 }
 
 std::string ArrayToString(const ArrayInstancePtr& array) {
@@ -493,7 +526,12 @@ std::string DescribeExpr(const gen::Expr& expr) {
         return "id(" + identifier->name() + ")";
     }
     if (const auto* let_expr = dynamic_cast<const gen::LetExpr*>(&expr)) {
-        return "let " + let_expr->name() + " = " + DescribeExpr(let_expr->expr());
+        std::string out = "let " + let_expr->name();
+        if (!let_expr->type_name().empty()) {
+            out += ":" + let_expr->type_name();
+        }
+        out += " = " + DescribeExpr(let_expr->expr());
+        return out;
     }
     if (const auto* assign_expr = dynamic_cast<const gen::AssignExpr*>(&expr)) {
         return "assign " + DescribeExpr(assign_expr->target()) + " = " +
@@ -504,6 +542,9 @@ std::string DescribeExpr(const gen::Expr& expr) {
         return "assign " + DescribeExpr(compound_assign_expr->target()) + " " +
                compound_assign_expr->op() + " " +
                DescribeExpr(compound_assign_expr->expr());
+    }
+    if (const auto* cast_expr = dynamic_cast<const gen::CastExpr*>(&expr)) {
+        return "cast(" + DescribeExpr(cast_expr->expr()) + " as " + cast_expr->type_name() + ")";
     }
     if (dynamic_cast<const gen::Add*>(&expr) != nullptr) {
         return "add";
@@ -580,6 +621,9 @@ std::string DescribeExpr(const gen::Expr& expr) {
     if (const auto* call = dynamic_cast<const gen::Call*>(&expr)) {
         return "call(" + call->name() + ")";
     }
+    if (const auto* new_expr = dynamic_cast<const gen::NewExpr*>(&expr)) {
+        return "new(" + new_expr->name() + ")";
+    }
     if (const auto* array_literal = dynamic_cast<const gen::ArrayLiteral*>(&expr)) {
         return "array[" + std::to_string(array_literal->elements().size()) + "]";
     }
@@ -597,7 +641,12 @@ std::string DescribeExpr(const gen::Expr& expr) {
 
 std::string DescribeStatement(const gen::Statement& statement) {
     if (const auto* let_stmt = dynamic_cast<const gen::LetStmt*>(&statement)) {
-        return "let " + let_stmt->name() + " = " + DescribeExpr(let_stmt->expr());
+        std::string out = "let " + let_stmt->name();
+        if (!let_stmt->type_name().empty()) {
+            out += ":" + let_stmt->type_name();
+        }
+        out += " = " + DescribeExpr(let_stmt->expr());
+        return out;
     }
     if (const auto* return_stmt = dynamic_cast<const gen::ReturnStmt*>(&statement)) {
         return "return " + DescribeExpr(return_stmt->expr());
@@ -638,6 +687,7 @@ struct RuntimeEnvironment {
     SymbolTable symbols;
     std::unordered_map<std::string, const gen::FunctionDecl*> functions;
     std::unordered_map<std::string, std::unordered_map<std::string, const gen::MethodDecl*>> class_methods;
+    std::unordered_map<std::string, const gen::ConstructorDecl*> class_constructors;
     std::vector<std::unordered_map<std::string, Value>> scopes;
     std::vector<LoadedProgramUnit> loaded_units;
 };
@@ -646,6 +696,7 @@ struct ClassMemberSummary {
     std::vector<std::string> fields;
     std::vector<std::string> methods;
     std::unordered_map<std::string, const gen::MethodDecl*> method_nodes;
+    const gen::ConstructorDecl* constructor_node = nullptr;
 };
 
 ClassMemberSummary SummarizeClassMembers(const gen::ClassDecl& class_decl) {
@@ -667,11 +718,28 @@ ClassMemberSummary SummarizeClassMembers(const gen::ClassDecl& class_decl) {
         }
 
         if (const auto* method = dynamic_cast<const gen::MethodDecl*>(member.get())) {
+            if (method->name() == class_decl.name()) {
+                throw InterpreterException("method '" + method->name() + "' in class '" + class_decl.name() +
+                                           "' conflicts with constructor syntax; declare constructors as '" +
+                                           class_decl.name() + "(...)'");
+            }
             if (!seen_methods.insert(method->name()).second) {
                 throw InterpreterException("duplicate method '" + method->name() + "' in class '" + class_decl.name() + "'");
             }
             out.methods.push_back(method->name());
             out.method_nodes.emplace(method->name(), method);
+            continue;
+        }
+
+        if (const auto* ctor = dynamic_cast<const gen::ConstructorDecl*>(member.get())) {
+            if (ctor->declared_name() != class_decl.name()) {
+                throw InterpreterException("constructor '" + ctor->declared_name() + "' does not match class name '" +
+                                           class_decl.name() + "'");
+            }
+            if (out.constructor_node != nullptr) {
+                throw InterpreterException("duplicate constructor in class '" + class_decl.name() + "'");
+            }
+            out.constructor_node = ctor;
             continue;
         }
 
@@ -1044,11 +1112,12 @@ Value AssignToTarget(const gen::Expr& target, Value value, RuntimeEnvironment& e
         if (object == nullptr || !(*object)) {
             throw InterpreterException("member assignment requires an object value");
         }
-        const auto field_it = (*object)->fields.find(member->member());
-        if (field_it == (*object)->fields.end()) {
-            throw InterpreterException("unknown field '" + member->member() + "' on type '" + (*object)->class_name + "'");
+        const std::size_t field_index =
+            ResolveLegacyFieldIndex(env.symbols, *object, member->member(), "member assignment");
+        if (field_index >= (*object)->memory.size()) {
+            throw InterpreterException("member assignment out of range for type '" + (*object)->class_name + "'");
         }
-        field_it->second = value;
+        (*object)->memory[field_index] = value;
         return value;
     }
 
@@ -1080,6 +1149,14 @@ const gen::MethodDecl* FindMethodOnClass(const RuntimeEnvironment& env, std::str
         return nullptr;
     }
     return method_it->second;
+}
+
+const gen::ConstructorDecl* FindConstructorOnClass(const RuntimeEnvironment& env, std::string_view class_name) {
+    const auto ctor_it = env.class_constructors.find(std::string(class_name));
+    if (ctor_it == env.class_constructors.end()) {
+        return nullptr;
+    }
+    return ctor_it->second;
 }
 
 Value CallUserFunction(const gen::FunctionDecl& function, const std::vector<Value>& args, RuntimeEnvironment& env) {
@@ -1121,9 +1198,8 @@ Value CallMethod(const ObjectInstancePtr& self_object, const gen::MethodDecl& me
     }
 
     std::unordered_map<std::string, Value> frame;
-    frame.reserve(method.params().size() + 2);
+    frame.reserve(method.params().size() + 1);
     frame["self"] = self_object;
-    frame["this"] = self_object;
     for (std::size_t i = 0; i < method.params().size(); ++i) {
         frame[method.params()[i]] = args[i];
     }
@@ -1137,6 +1213,40 @@ Value CallMethod(const ObjectInstancePtr& self_object, const gen::MethodDecl& me
     } guard{env};
 
     const StatementResult result = ExecuteStatementList(method.body(), env, false);
+    if (result.broke) {
+        throw InterpreterException("break used outside loop or switch");
+    }
+    return result.value;
+}
+
+Value CallConstructor(const ObjectInstancePtr& self_object, const gen::ConstructorDecl& ctor, const std::vector<Value>& args,
+                      RuntimeEnvironment& env) {
+    if (!self_object) {
+        throw InterpreterException("cannot call constructor '" + ctor.declared_name() + "' on null object");
+    }
+    if (ctor.params().size() != args.size()) {
+        throw InterpreterException("constructor '" + self_object->class_name + "(" +
+                                   JoinCommaSeparated(ctor.params()) + ")' expects " +
+                                   std::to_string(ctor.params().size()) + " argument(s), got " +
+                                   std::to_string(args.size()));
+    }
+
+    std::unordered_map<std::string, Value> frame;
+    frame.reserve(ctor.params().size() + 1);
+    frame["self"] = self_object;
+    for (std::size_t i = 0; i < ctor.params().size(); ++i) {
+        frame[ctor.params()[i]] = args[i];
+    }
+
+    env.scopes.push_back(std::move(frame));
+    struct FrameGuard {
+        RuntimeEnvironment& env_ref;
+        ~FrameGuard() {
+            env_ref.scopes.pop_back();
+        }
+    } guard{env};
+
+    const StatementResult result = ExecuteStatementList(ctor.body(), env, false);
     if (result.broke) {
         throw InterpreterException("break used outside loop or switch");
     }
@@ -1787,40 +1897,55 @@ Value EvaluateExpr(const gen::Expr& expr, RuntimeEnvironment& env) {
         if (object == nullptr || !(*object)) {
             throw InterpreterException("member access requires an object value");
         }
-        const auto field_it = (*object)->fields.find(member->member());
-        if (field_it == (*object)->fields.end()) {
-            throw InterpreterException("unknown field '" + member->member() + "' on type '" + (*object)->class_name + "'");
+        const std::size_t field_index =
+            ResolveLegacyFieldIndex(env.symbols, *object, member->member(), "member access");
+        if (field_index >= (*object)->memory.size()) {
+            throw InterpreterException("member access out of range for type '" + (*object)->class_name + "'");
         }
-        return field_it->second;
+        return (*object)->memory[field_index];
     }
     if (const auto* call = dynamic_cast<const gen::Call*>(&expr)) {
-        const std::vector<Value> args = EvaluateArgs(call->args(), env);
-
         const auto user_it = env.functions.find(call->name());
         if (user_it != env.functions.end()) {
+            const std::vector<Value> args = EvaluateArgs(call->args(), env);
             return CallUserFunction(*user_it->second, args, env);
         }
 
         if (const SymbolTable::ClassInfo* class_info = env.symbols.FindClass(call->name())) {
-            if (class_info->field_names.size() != args.size()) {
-                throw InterpreterException("type '" + class_info->name + "' expects " +
-                                           std::to_string(class_info->field_names.size()) + " constructor arg(s), got " +
-                                           std::to_string(args.size()));
-            }
-
-            auto object = std::make_shared<ObjectInstance>();
-            object->class_name = class_info->name;
-            for (std::size_t i = 0; i < args.size(); ++i) {
-                object->fields[class_info->field_names[i]] = args[i];
-            }
-            return object;
+            throw InterpreterException("type '" + class_info->name + "' is not callable; use 'new " + class_info->name +
+                                       "(...)' for construction");
         }
 
         if (IsBuiltinFunction(call->name())) {
+            const std::vector<Value> args = EvaluateArgs(call->args(), env);
             return CallBuiltin(call->name(), args);
         }
 
         throw InterpreterException("unknown function or type: " + call->name());
+    }
+    if (const auto* new_expr = dynamic_cast<const gen::NewExpr*>(&expr)) {
+        const std::vector<Value> args = EvaluateArgs(new_expr->args(), env);
+        const SymbolTable::ClassInfo* class_info = env.symbols.FindClass(new_expr->name());
+        if (class_info == nullptr) {
+            throw InterpreterException("unknown type: " + new_expr->name());
+        }
+
+        auto object = std::make_shared<ObjectInstance>();
+        object->class_name = class_info->name;
+        object->class_layout = nullptr;
+        object->memory.resize(class_info->field_names.size(), std::monostate{});
+
+        const gen::ConstructorDecl* ctor = FindConstructorOnClass(env, class_info->name);
+        if (ctor != nullptr) {
+            (void)CallConstructor(object, *ctor, args, env);
+            return object;
+        }
+        if (!args.empty()) {
+            throw InterpreterException("type '" + class_info->name +
+                                       "' has no constructor; new expects 0 argument(s), got " +
+                                       std::to_string(args.size()));
+        }
+        return object;
     }
 
     throw InterpreterException("unsupported expression node");
@@ -1922,10 +2047,6 @@ void CollectTopLevelGlobalFromStatement(const gen::Statement& statement, SymbolT
 }
 
 } // namespace
-
-std::string ValueToString(const Value& value) {
-    return ValueToStringInternal(value);
-}
 
 AST ParseProgram(std::string_view source_text) {
     try {
@@ -2029,6 +2150,12 @@ void RegisterProgramDeclarations(const gen::Program& program, RuntimeEnvironment
                                                " (" + std::string(unit_name) + ")");
                 }
             }
+            if (summary.constructor_node != nullptr) {
+                if (!env.class_constructors.emplace(class_decl->name(), summary.constructor_node).second) {
+                    throw InterpreterException("duplicate constructor declaration for class '" + class_decl->name() + "' (" +
+                                               std::string(unit_name) + ")");
+                }
+            }
         }
     }
 }
@@ -2066,10 +2193,15 @@ std::vector<std::filesystem::path> ListStandardLibraryFiles() {
     }
 
     const std::vector<std::string> ordered_files = {
-        "Core.txt",
-        "IO.txt",
-        "Math.txt",
-        "Complex.txt",
+        "Core.neon",
+        "IO.neon",
+        "Math.neon",
+        "Complex.neon",
+        "ArrayList.neon",
+        "LinkedList.neon",
+        "HashMap.neon",
+        "Deflate.neon",
+        "PNG.neon",
     };
 
     std::unordered_set<std::string> known_names;
@@ -2130,24 +2262,5 @@ void LoadStandardLibrary(RuntimeEnvironment& env) {
 }
 
 } // namespace
-
-Value InterpretProgram(const AST& ast) {
-    const gen::Program& program = RequireProgram(ast);
-
-    RuntimeEnvironment env;
-    env.scopes.emplace_back();
-    env.scopes.front()["pi"] = std::acos(-1.0);
-    env.scopes.front()["e"] = std::exp(1.0);
-    env.scopes.front()["tau"] = 2.0 * std::acos(-1.0);
-
-    LoadStandardLibrary(env);
-    RegisterProgramDeclarations(program, env, "<program>");
-    return ExecuteTopLevelStatements(program, env, "<program>", true);
-}
-
-Value InterpretSource(std::string_view source_text) {
-    const AST ast = ParseProgram(source_text);
-    return InterpretProgram(ast);
-}
 
 } // namespace compiler::interpreter
